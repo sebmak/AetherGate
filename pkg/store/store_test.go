@@ -110,3 +110,44 @@ func TestStoreImportLegacyAndCRUD(t *testing.T) {
 		t.Fatalf("Expected 2 targets after delete, got %d", len(s.GetTargets()))
 	}
 }
+
+// TestStoreTargetsSortedByName verifies that GetTargets always returns targets alphabetically ordered by name
+func TestStoreTargetsSortedByName(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "proxyserver-sort-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	configPath := filepath.Join(tempDir, "config.json")
+	s, err := NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore failed: %v", err)
+	}
+
+	// Insert in non-alphabetical order
+	names := []string{"Zebra", "Alpha", "Beta", "Gamma"}
+	for _, name := range names {
+		if err := s.SaveTarget(&ProxyTarget{
+			Name:    name,
+			Domain:  name + ".example.com",
+			Host:    "127.0.0.1:8080",
+			Enabled: true,
+		}); err != nil {
+			t.Fatalf("Failed to save target %s: %v", name, err)
+		}
+	}
+
+	targets := s.GetTargets()
+	if len(targets) != 4 {
+		t.Fatalf("Expected 4 targets, got %d", len(targets))
+	}
+
+	expected := []string{"Alpha", "Beta", "Gamma", "Zebra"}
+	for i, exp := range expected {
+		if targets[i].Name != exp {
+			t.Errorf("At index %d: expected name '%s', got '%s'", i, exp, targets[i].Name)
+		}
+	}
+}
+

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -313,7 +314,7 @@ func (s *Store) ImportLegacyPayloadLocked(content []byte) (int, error) {
 	return count, nil
 }
 
-// GetTargets returns all proxy targets
+// GetTargets returns all proxy targets sorted alphabetically by name
 func (s *Store) GetTargets() []*ProxyTarget {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -323,6 +324,16 @@ func (s *Store) GetTargets() []*ProxyTarget {
 		copy := *t
 		targets = append(targets, &copy)
 	}
+
+	sort.Slice(targets, func(i, j int) bool {
+		nameI := strings.ToLower(strings.TrimSpace(targets[i].Name))
+		nameJ := strings.ToLower(strings.TrimSpace(targets[j].Name))
+		if nameI == nameJ {
+			return strings.ToLower(targets[i].Domain) < strings.ToLower(targets[j].Domain)
+		}
+		return nameI < nameJ
+	})
+
 	return targets
 }
 
