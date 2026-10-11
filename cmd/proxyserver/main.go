@@ -66,8 +66,8 @@ func main() {
 	adminHTTP := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.AdminPort),
 		Handler:      adminHandler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 120 * time.Second,
 	}
 
 	// 6. Setup HTTP Reverse Proxy Server (also serves ACME challenges)

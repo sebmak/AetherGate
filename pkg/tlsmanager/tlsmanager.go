@@ -1,7 +1,11 @@
 package tlsmanager
 
 import (
+	"bytes"
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -10,6 +14,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +24,7 @@ import (
 
 	"github.com/sebmak/proxyserver/pkg/logger"
 	"github.com/sebmak/proxyserver/pkg/store"
+	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -49,6 +55,7 @@ type Manager struct {
 	selfSignedCert *tls.Certificate
 	lastErrors     map[string]string
 	renewing       map[string]bool
+	httpTokens     map[string]string // challengePath -> challengeResponse
 }
 
 // NewManager creates a TLS certificate Manager
@@ -62,6 +69,7 @@ func NewManager(s *store.Store, certDir string) (*Manager, error) {
 		certDir:    certDir,
 		lastErrors: make(map[string]string),
 		renewing:   make(map[string]bool),
+		httpTokens: make(map[string]string),
 	}
 
 	m.initAutocertManager()
@@ -72,6 +80,9 @@ func (m *Manager) initAutocertManager() {
 	// Host policy dynamically verifies that the incoming SNI hostname corresponds to an active proxy route
 	hostPolicy := func(ctx context.Context, host string) error {
 		cleanHost := strings.ToLower(strings.TrimSpace(host))
+		if h, _, err := net.SplitHostPort(cleanHost); err == nil {
+			cleanHost = h
+		}
 		if _, found := m.store.GetTargetByDomain(cleanHost); found {
 			return nil
 		}
@@ -83,6 +94,12 @@ func (m *Manager) initAutocertManager() {
 	if store.IsForbiddenEmail(email) {
 		email = ""
 	}
+	if email == "" {
+		envEmail := strings.TrimSpace(os.Getenv("EMAIL"))
+		if !store.IsForbiddenEmail(envEmail) {
+			email = envEmail
+		}
+	}
 
 	m.autocertMgr = &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
@@ -90,6 +107,9 @@ func (m *Manager) initAutocertManager() {
 		Email:      email,
 		Cache:      autocert.DirCache(m.certDir),
 	}
+
+	// Explicitly invoke HTTPHandler to enable HTTP-01 ACME challenges (sets tryHTTP01 = true)
+	_ = m.autocertMgr.HTTPHandler(nil)
 }
 
 // GetTLSConfig returns a tls.Config configured for dynamic certificate retrieval
@@ -162,7 +182,19 @@ func (m *Manager) HTTPHandler(fallback http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
 			logger.SystemInfo("TLS", "Received Let's Encrypt ACME HTTP-01 verification challenge for '%s' from %s", r.Host, r.RemoteAddr)
+
+			// 1. Check direct HTTP tokens first
+			m.mu.RLock()
+			tokenVal, hasToken := m.httpTokens[r.URL.Path]
+			m.mu.RUnlock()
+			if hasToken {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(tokenVal))
+				return
+			}
 		}
+
 		m.mu.RLock()
 		am := m.autocertMgr
 		m.mu.RUnlock()
@@ -215,14 +247,19 @@ func (m *Manager) GetCertificateInfo(domain string) *CertificateInfo {
 
 	// 2. Autocert Mode: Check if a certificate file is cached on disk
 	if mode == "autocert" {
-		certPath := filepath.Join(m.certDir, cleanHost)
-		if certData, err := os.ReadFile(certPath); err == nil {
-			if leaf, err := parseCertFromPEM(certData); err == nil {
-				res := populateCertInfo(info, leaf, false)
-				if lastErr != "" {
-					res.LastError = lastErr
+		candidates := []string{
+			filepath.Join(m.certDir, cleanHost),
+			filepath.Join(m.certDir, cleanHost+"+rsa"),
+		}
+		for _, certPath := range candidates {
+			if certData, err := os.ReadFile(certPath); err == nil {
+				if leaf, err := parseCertFromPEM(certData); err == nil {
+					res := populateCertInfo(info, leaf, false)
+					if lastErr != "" {
+						res.LastError = lastErr
+					}
+					return res
 				}
-				return res
 			}
 		}
 	}
@@ -235,6 +272,7 @@ func (m *Manager) GetCertificateInfo(domain string) *CertificateInfo {
 			if lastErr != "" {
 				info.Status = "error"
 				info.LastError = lastErr
+				info.Issuer = "Self-Signed (Let's Encrypt renewal failed)"
 			} else {
 				info.Status = "self_signed"
 			}
@@ -296,23 +334,26 @@ func (m *Manager) RenewCertificate(ctx context.Context, domain string) (*Certifi
 
 	logger.SystemInfo("TLS", "Manual certificate regeneration initiated for '%s'", cleanHost)
 
-	// Remove cached certificate on disk
-	certFile := filepath.Join(m.certDir, cleanHost)
-	_ = os.Remove(certFile)
+	// Remove cached certificate files on disk (.pem, +rsa, +token)
+	for _, suffix := range []string{"", "+rsa", "+token"} {
+		_ = os.Remove(filepath.Join(m.certDir, cleanHost+suffix))
+	}
 
 	// Re-initialize autocert manager so in-memory cache is purged
 	m.mu.Lock()
 	m.initAutocertManager()
-	autocertMgr := m.autocertMgr
 	m.mu.Unlock()
 
-	// Trigger certificate retrieval with Let's Encrypt
-	hello := &tls.ClientHelloInfo{ServerName: cleanHost}
-	_, err := autocertMgr.GetCertificate(hello)
-	if err != nil {
-		diag := diagnoseACMEError(err)
+	// 1. Direct RFC 8555 HTTP-01 challenge issuance (fast & reliable behind Cloudflare/reverse proxies)
+	httpCtx, httpCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer httpCancel()
+
+	acmeErr := m.obtainACMEHTTP01Cert(httpCtx, cleanHost)
+	if acmeErr != nil {
+		diag := diagnoseACMEError(acmeErr)
 		m.mu.Lock()
 		m.lastErrors[cleanHost] = diag
+		delete(m.renewing, cleanHost)
 		m.mu.Unlock()
 		logger.SystemError("TLS", "Certificate regeneration failed for '%s': %s", cleanHost, diag)
 		return m.GetCertificateInfo(cleanHost), fmt.Errorf("%s", diag)
@@ -320,10 +361,179 @@ func (m *Manager) RenewCertificate(ctx context.Context, domain string) (*Certifi
 
 	m.mu.Lock()
 	delete(m.lastErrors, cleanHost)
+	delete(m.renewing, cleanHost)
+	m.initAutocertManager()
 	m.mu.Unlock()
 
-	logger.SystemInfo("TLS", "Successfully generated and cached new Let's Encrypt certificate for '%s'", cleanHost)
+	logger.SystemInfo("TLS", "Successfully generated and cached new Let's Encrypt certificate for '%s' via direct HTTP-01", cleanHost)
 	return m.GetCertificateInfo(cleanHost), nil
+}
+
+// obtainACMEHTTP01Cert performs direct RFC 8555 HTTP-01 challenge issuance via Let's Encrypt
+func (m *Manager) obtainACMEHTTP01Cert(ctx context.Context, domain string) error {
+	accountKey, err := m.getOrCreateACMEAccountKey()
+	if err != nil {
+		return fmt.Errorf("failed to load/create ACME account key: %w", err)
+	}
+
+	client := &acme.Client{
+		Key:          accountKey,
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+	}
+
+	tlsCfg := m.store.GetTLSConfig()
+	email := strings.TrimSpace(tlsCfg.Email)
+	if store.IsForbiddenEmail(email) {
+		email = ""
+	}
+	if email == "" {
+		envEmail := strings.TrimSpace(os.Getenv("EMAIL"))
+		if !store.IsForbiddenEmail(envEmail) {
+			email = envEmail
+		}
+	}
+	var contacts []string
+	if email != "" {
+		contacts = []string{"mailto:" + email}
+	}
+	account := &acme.Account{Contact: contacts}
+	_, _ = client.Register(ctx, account, acme.AcceptTOS)
+
+	order, err := client.AuthorizeOrder(ctx, acme.DomainIDs(domain))
+	if err != nil {
+		return err
+	}
+
+	for _, authzURL := range order.AuthzURLs {
+		authz, err := client.GetAuthorization(ctx, authzURL)
+		if err != nil {
+			return err
+		}
+		if authz.Status == acme.StatusValid {
+			continue
+		}
+
+		var httpChal *acme.Challenge
+		for _, ch := range authz.Challenges {
+			if ch.Type == "http-01" {
+				httpChal = ch
+				break
+			}
+		}
+		if httpChal == nil {
+			return fmt.Errorf("no http-01 challenge provided by ACME server for %s", domain)
+		}
+
+		resp, err := client.HTTP01ChallengeResponse(httpChal.Token)
+		if err != nil {
+			return fmt.Errorf("failed to compute challenge response: %w", err)
+		}
+		chalPath := client.HTTP01ChallengePath(httpChal.Token)
+
+		m.mu.Lock()
+		m.httpTokens[chalPath] = resp
+		m.mu.Unlock()
+
+		defer func(p string) {
+			m.mu.Lock()
+			delete(m.httpTokens, p)
+			m.mu.Unlock()
+		}(chalPath)
+
+		if _, err := client.Accept(ctx, httpChal); err != nil {
+			return fmt.Errorf("failed to accept http-01 challenge: %w", err)
+		}
+
+		authzRes, err := client.WaitAuthorization(ctx, authz.URI)
+		if err != nil {
+			return fmt.Errorf("http-01 challenge authorization failed: %w", err)
+		}
+		if authzRes.Status != acme.StatusValid {
+			return fmt.Errorf("authorization not valid: status %s", authzRes.Status)
+		}
+	}
+
+	order, err = client.WaitOrder(ctx, order.URI)
+	if err != nil {
+		return fmt.Errorf("failed to finalize ACME order: %w", err)
+	}
+
+	certPrivKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to generate EC key for certificate: %w", err)
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		DNSNames: []string{domain},
+	}, certPrivKey)
+	if err != nil {
+		return fmt.Errorf("failed to generate CSR: %w", err)
+	}
+
+	chain, _, err := client.CreateCertFromOrder(ctx, order, csrBytes, true)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve certificate chain from order: %w", err)
+	}
+
+	var buf bytes.Buffer
+	keyDer, err := x509.MarshalECPrivateKey(certPrivKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	_ = pem.Encode(&buf, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer})
+	for _, certDer := range chain {
+		_ = pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: certDer})
+	}
+
+	certPath := filepath.Join(m.certDir, domain)
+	if err := os.WriteFile(certPath, buf.Bytes(), 0600); err != nil {
+		return fmt.Errorf("failed to persist certificate to %s: %w", certPath, err)
+	}
+
+	return nil
+}
+
+func (m *Manager) getOrCreateACMEAccountKey() (crypto.Signer, error) {
+	keyPath := filepath.Join(m.certDir, "acme_account+key")
+	if data, err := os.ReadFile(keyPath); err == nil {
+		if signer, err := loadPrivateKey(data); err == nil {
+			return signer, nil
+		}
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	der, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+	_ = os.WriteFile(keyPath, pemBytes, 0600)
+	return key, nil
+}
+
+func loadPrivateKey(data []byte) (crypto.Signer, error) {
+	for {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			break
+		}
+		if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
+			return key, nil
+		}
+		if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+			return key, nil
+		}
+		if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+			if signer, ok := key.(crypto.Signer); ok {
+				return signer, nil
+			}
+		}
+		data = rest
+	}
+	return nil, fmt.Errorf("no valid private key found")
 }
 
 // RenewAllCertificates forces renewal for all registered domains
@@ -423,14 +633,18 @@ func diagnoseACMEError(err error) string {
 	reason := ""
 	if strings.Contains(errStr, "invalidContact") || strings.Contains(errStr, "forbidden domain") {
 		reason = "Registration contact email was rejected by Let's Encrypt (e.g. example.com). Update email in Settings."
+	} else if strings.Contains(errStr, "certificate is not trusted") {
+		reason = "System root certificates unavailable. Ensure system CA store is installed."
 	} else if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "timeout") || strings.Contains(errStr, "no such host") {
 		reason = "Let's Encrypt could not connect to your server from the internet. Verify router forwards port 80/443 and DNS points to public IP."
-	} else if strings.Contains(errStr, "rate limited") {
-		reason = "Let's Encrypt rate limit reached for this domain. Wait before requesting new certificates."
+	} else if strings.Contains(errStr, "rate limited") || strings.Contains(errStr, "rateLimited") || strings.Contains(errStr, "too many failed authorizations") {
+		reason = "Let's Encrypt rate limit reached (too many failed authorizations within 1 hour). Please wait for the cooldown period before requesting new certificates."
 	} else if strings.Contains(errStr, "NXDOMAIN") {
 		reason = "Domain does not exist in public DNS. Ensure Cloudflare DDNS has synced your public IP."
 	} else if strings.Contains(errStr, "unauthorized") {
 		reason = "ACME HTTP-01 challenge unauthorized. Ensure incoming traffic on port 80 reaches ProxyServer without being blocked or redirected."
+	} else if strings.Contains(errStr, "no viable challenge type") {
+		reason = "No viable ACME challenge type found. Ensure port 80 HTTP-01 challenge handler is reachable."
 	}
 
 	if reason != "" {
