@@ -83,9 +83,10 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 	if tlsCfg.Mode == "custom" && tlsCfg.CertPath != "" && tlsCfg.KeyPath != "" {
 		cert, err := tls.LoadX509KeyPair(tlsCfg.CertPath, tlsCfg.KeyPath)
 		if err == nil {
+			logger.SystemInfo("TLS", "Served custom TLS certificate for '%s'", hello.ServerName)
 			return &cert, nil
 		}
-		logger.Warn("Failed to load custom TLS cert (%s, %s): %v", tlsCfg.CertPath, tlsCfg.KeyPath, err)
+		logger.SystemError("TLS", "Failed to load custom TLS cert files (Cert: %s, Key: %s): %v. Falling back to self-signed cert.", tlsCfg.CertPath, tlsCfg.KeyPath, err)
 	}
 
 	// 2. If autocert mode is active and we have an SNI server name, request via Let's Encrypt
@@ -104,12 +105,35 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 
 				cert, err := m.autocertMgr.GetCertificate(hello)
 				if err == nil {
+					logger.SystemInfo("TLS", "Valid Let's Encrypt certificate retrieved for '%s'", hello.ServerName)
 					return cert, nil
 				}
-				logger.Warn("Autocert certificate request for %s failed: %v (falling back to dev cert)", hello.ServerName, err)
+
+				// Diagnose cause of ACME certificate generation failure
+				errStr := err.Error()
+				reason := ""
+				if strings.Contains(errStr, "invalidContact") || strings.Contains(errStr, "forbidden domain") {
+					reason = "Registration contact email was rejected by Let's Encrypt (e.g. example.com). Update email in Settings."
+				} else if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "timeout") || strings.Contains(errStr, "no such host") {
+					reason = "Let's Encrypt cannot connect to your server from the internet. Verify router forwards port 80/443 to this machine and DNS points to your public IP."
+				} else if strings.Contains(errStr, "rate limited") {
+					reason = "Let's Encrypt rate limit reached for this domain. Wait before requesting new certificates."
+				} else if strings.Contains(errStr, "NXDOMAIN") {
+					reason = "Domain does not exist in public DNS. Ensure Cloudflare DDNS has synced your public IP."
+				} else if strings.Contains(errStr, "unauthorized") {
+					reason = "ACME HTTP-01 challenge unauthorized. Ensure incoming traffic on port 80 reaches ProxyServer without being blocked or redirected."
+				}
+
+				if reason != "" {
+					logger.SystemError("TLS", "ACME certificate request for '%s' failed: %v | Cause: %s (Falling back to dev cert)", hello.ServerName, err, reason)
+				} else {
+					logger.SystemError("TLS", "ACME certificate request for '%s' failed: %v (Falling back to dev cert)", hello.ServerName, err)
+				}
 			} else {
-				logger.Debug("Incoming SNI %s is not a registered proxy target, serving self-signed cert", hello.ServerName)
+				logger.SystemWarn("TLS", "Incoming SNI '%s' is not in registered proxy targets. ACME skipped, serving fallback dev cert.", hello.ServerName)
 			}
+		} else {
+			logger.SystemWarn("TLS", "Incoming TLS handshake without SNI hostname. Serving fallback dev cert.")
 		}
 	}
 
@@ -119,7 +143,13 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 
 // HTTPHandler wraps an HTTP handler to intercept ACME challenges
 func (m *Manager) HTTPHandler(fallback http.Handler) http.Handler {
-	return m.autocertMgr.HTTPHandler(fallback)
+	acmeHandler := m.autocertMgr.HTTPHandler(fallback)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
+			logger.SystemInfo("TLS", "Received Let's Encrypt ACME HTTP-01 verification challenge for '%s' from %s", r.Host, r.RemoteAddr)
+		}
+		acmeHandler.ServeHTTP(w, r)
+	})
 }
 
 func (m *Manager) getOrCreateSelfSigned() (*tls.Certificate, error) {

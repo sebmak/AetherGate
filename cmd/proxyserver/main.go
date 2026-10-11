@@ -74,6 +74,7 @@ func main() {
 	proxyHTTP := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      tlsMgr.HTTPHandler(proxyEngine),
+		ErrorLog:     logger.NewStandardLogger("HTTP"),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
@@ -83,6 +84,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPSPort),
 		Handler:      proxyEngine,
 		TLSConfig:    tlsMgr.GetTLSConfig(),
+		ErrorLog:     logger.NewStandardLogger("TLS"),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}

@@ -94,6 +94,15 @@ export interface RequestLog {
   error?: string
 }
 
+export interface SystemLog {
+  id: string
+  timestamp: string
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
+  source: 'TLS' | 'ACME' | 'DDNS' | 'PROXY' | 'AUTH' | 'SYSTEM' | string
+  message: string
+  details?: string
+}
+
 export interface TLSConfig {
   mode: 'autocert' | 'custom' | 'none'
   email: string

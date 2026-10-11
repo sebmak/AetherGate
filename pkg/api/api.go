@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,7 +92,11 @@ func (s *Server) registerRoutes() {
 
 	// Logs
 	s.mux.HandleFunc("GET /api/logs", RequireAdminAuth(s.store, s.handleGetLogs))
+	s.mux.HandleFunc("DELETE /api/logs", RequireAdminAuth(s.store, s.handleClearLogs))
 	s.mux.HandleFunc("GET /api/logs/stream", RequireAdminAuth(s.store, s.handleStreamLogs))
+	s.mux.HandleFunc("GET /api/system-logs", RequireAdminAuth(s.store, s.handleGetSystemLogs))
+	s.mux.HandleFunc("DELETE /api/system-logs", RequireAdminAuth(s.store, s.handleClearSystemLogs))
+	s.mux.HandleFunc("GET /api/system-logs/stream", RequireAdminAuth(s.store, s.handleStreamSystemLogs))
 
 	// Settings
 	s.mux.HandleFunc("GET /api/settings", RequireAdminAuth(s.store, s.handleGetSettings))
@@ -577,8 +582,18 @@ func (s *Server) handleDDNSTestToken(w http.ResponseWriter, r *http.Request) {
 // Logs handlers
 func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
 	logs := logger.GetLogBuffer().GetRecent(limit)
 	writeJSON(w, http.StatusOK, logs)
+}
+
+func (s *Server) handleClearLogs(w http.ResponseWriter, r *http.Request) {
+	logger.GetLogBuffer().Clear()
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
 func (s *Server) handleStreamLogs(w http.ResponseWriter, r *http.Request) {
@@ -594,6 +609,74 @@ func (s *Server) handleStreamLogs(w http.ResponseWriter, r *http.Request) {
 
 	ch := logger.GetLogBuffer().Subscribe()
 	defer logger.GetLogBuffer().Unsubscribe(ch)
+
+	notify := r.Context().Done()
+
+	for {
+		select {
+		case <-notify:
+			return
+		case entry, ok := <-ch:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(w, "data: %s\n\n", entry.String())
+			flusher.Flush()
+		}
+	}
+}
+
+func (s *Server) handleGetSystemLogs(w http.ResponseWriter, r *http.Request) {
+	limit := 150
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	logs := logger.GetSystemLogBuffer().GetRecent(limit)
+
+	levelFilter := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("level")))
+	sourceFilter := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("source")))
+	searchFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("search")))
+
+	if (levelFilter != "" && levelFilter != "ALL") || (sourceFilter != "" && sourceFilter != "ALL") || searchFilter != "" {
+		filtered := make([]*logger.SystemLog, 0, len(logs))
+		for _, l := range logs {
+			if levelFilter != "" && levelFilter != "ALL" && l.Level != levelFilter {
+				continue
+			}
+			if sourceFilter != "" && sourceFilter != "ALL" && l.Source != sourceFilter {
+				continue
+			}
+			if searchFilter != "" && !strings.Contains(strings.ToLower(l.Message), searchFilter) && !strings.Contains(strings.ToLower(l.Source), searchFilter) {
+				continue
+			}
+			filtered = append(filtered, l)
+		}
+		logs = filtered
+	}
+
+	writeJSON(w, http.StatusOK, logs)
+}
+
+func (s *Server) handleClearSystemLogs(w http.ResponseWriter, r *http.Request) {
+	logger.GetSystemLogBuffer().Clear()
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func (s *Server) handleStreamSystemLogs(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := logger.GetSystemLogBuffer().Subscribe()
+	defer logger.GetSystemLogBuffer().Unsubscribe(ch)
 
 	notify := r.Context().Done()
 

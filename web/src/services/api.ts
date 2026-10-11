@@ -4,6 +4,7 @@ import type {
   CloudflareConfig,
   StatsResponse,
   RequestLog,
+  SystemLog,
   SystemSettings,
   CFZone,
 } from '../types'
@@ -179,8 +180,30 @@ export const api = {
   },
 
   // Logs
-  async getLogs(): Promise<RequestLog[]> {
-    return request<RequestLog[]>('/logs')
+  async getLogs(limit = 100): Promise<RequestLog[]> {
+    return request<RequestLog[]>(`/logs?limit=${limit}`)
+  },
+
+  async clearLogs(): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>('/logs', {
+      method: 'DELETE',
+    })
+  },
+
+  async getSystemLogs(params?: { limit?: number; level?: string; source?: string; search?: string }): Promise<SystemLog[]> {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.level) q.set('level', params.level)
+    if (params?.source) q.set('source', params.source)
+    if (params?.search) q.set('search', params.search)
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return request<SystemLog[]>(`/system-logs${qs}`)
+  },
+
+  async clearSystemLogs(): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>('/system-logs', {
+      method: 'DELETE',
+    })
   },
 
   // Settings
