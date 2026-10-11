@@ -16,6 +16,8 @@ services:
       # HTTPS Reverse Proxy (TLS)
       - "9443:9443"
     environment:
+      - PUID=99
+      - PGID=100
       - DATA_DIR=/data
       - CONFIG_PATH=/data/config.json
       - CERT_DIR=/data/certs

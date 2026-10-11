@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ShieldCheck, Lock, User, ArrowRight, ShieldAlert } from 'lucide-react'
+import { Lock, User, ArrowRight, ShieldAlert } from 'lucide-react'
 import { api } from '../services/api'
 
 interface LoginViewProps {
@@ -76,19 +76,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
       }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #2563eb, #38bdf8)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '1rem',
-            boxShadow: '0 0 24px rgba(56, 189, 248, 0.4)',
-          }}>
-            <ShieldCheck size={32} color="#fff" />
-          </div>
+          <img
+            src="/icon.png"
+            alt="ProxyServer Logo"
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              marginBottom: '1rem',
+              boxShadow: '0 0 32px rgba(56, 189, 248, 0.45)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              objectFit: 'cover',
+            }}
+          />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', marginBottom: '0.35rem' }}>
             {isSetup ? 'Initial Security Setup' : 'ProxyServer Gateway'}
           </h1>

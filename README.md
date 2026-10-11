@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="assets/logo.png" alt="ProxyServer Logo" width="220" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(56, 189, 248, 0.3);" />
+</p>
+
 # ProxyServer Gateway & Cloudflare DDNS Manager
 
 A unified, high-performance reverse proxy server and automated Cloudflare Dynamic DNS manager written in **Go**, featuring a modern **React (Vite + TypeScript)** dark mode web interface with full authentication and security.
 
-Combines and replaces legacy reverse proxies and standalone containers like `oznu/docker-cloudflare-ddns` into a single standalone gateway with **zero-downtime dynamic routing**.
+Combines and replaces legacy reverse proxies and standalone containers like `oznu/docker-cloudflare-ddns` into a single standalone gateway with **zero-downtime dynamic routing**. Built with an **Alpine Linux** container image and direct **Unraid template** support.
 
 ---
 
@@ -83,7 +87,23 @@ Combines and replaces legacy reverse proxies and standalone containers like `ozn
 
 ## ⚡ Quick Start
 
-### 1. Run with Docker Compose (Recommended)
+### 1. Run on Unraid (Alpine Docker Container)
+
+ProxyServer includes a native Unraid template XML and Alpine container configured with `nobody:users` (`PUID=99`, `PGID=100`) permissions:
+
+1. Copy the template to your Unraid flash drive:
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/sebmak/ProxyServer/main/unraid/ProxyServer.xml \
+     -o /boot/config/plugins/dockerMan/templates-user/my-ProxyServer.xml
+   ```
+2. In the Unraid WebGUI, navigate to **Docker -> Add Container**.
+3. Select **ProxyServer** from the Template dropdown.
+4. Verify port mappings (`8080`, `9080`, `9443`) and storage path (`/mnt/user/appdata/proxyserver`).
+5. Click **Apply**!
+
+Detailed guide: [unraid/README.md](unraid/README.md).
+
+### 2. Run with Docker Compose
 
 ```bash
 docker compose up -d

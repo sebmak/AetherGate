@@ -1,11 +1,9 @@
-import React from 'react'
 import {
   Server,
   Cloud,
   Activity,
   Settings,
   LayoutDashboard,
-  ShieldCheck,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -39,18 +37,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="sidebar">
       {/* Brand Header */}
       <div style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--border-subtle)' }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '10px',
-          background: 'linear-gradient(135deg, #2563eb, #38bdf8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 0 16px rgba(56, 189, 248, 0.35)',
-        }}>
-          <ShieldCheck size={22} color="#fff" />
-        </div>
+        <img
+          src="/icon.png"
+          alt="ProxyServer Logo"
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            boxShadow: '0 0 16px rgba(56, 189, 248, 0.4)',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            objectFit: 'cover',
+          }}
+        />
         <div className="logo-text">
           <div style={{ fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-0.02em', color: '#fff' }}>
             Proxy<span style={{ color: 'var(--accent-cyan)' }}>Server</span>

@@ -11,12 +11,13 @@ COPY web/ ./
 RUN npm run build
 
 # -------------------------------------------------------------
-# Stage 2: Build Backend (Go 1.27 + Embedded Frontend Assets)
+# Stage 2: Build Backend (Go + Embedded Frontend Assets)
 # -------------------------------------------------------------
-FROM golang:1.24-alpine AS go-builder
+FROM golang:alpine AS go-builder
 
-ENV CGO_ENABLED=0
-ENV GOOS=linux
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOTOOLCHAIN=auto
 
 RUN apk add --no-cache git ca-certificates tzdata
 
@@ -34,29 +35,36 @@ COPY --from=web-builder /app/web/dist ./web/dist
 RUN go build -ldflags="-s -w" -o /app/bin/proxyserver ./cmd/proxyserver
 
 # -------------------------------------------------------------
-# Stage 3: Minimal Production Image
+# Stage 3: Minimal Production Image (Alpine)
 # -------------------------------------------------------------
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S appgroup && adduser -S appuser -G appgroup \
-    && mkdir -p /var/app /data/certs \
-    && chown -R appuser:appgroup /var/app /data
+# Install runtime dependencies:
+# - ca-certificates: TLS verification (Let's Encrypt, Cloudflare API, external IP resolvers)
+# - tzdata: accurate timezone support for logging
+# - su-exec: secure privilege dropping matching Unraid PUID/PGID (nobody:users)
+RUN apk add --no-cache ca-certificates tzdata su-exec \
+    && mkdir -p /var/app /data/certs
 
 WORKDIR /var/app
 
 # Copy binary from builder
-COPY --from=go-builder --chown=appuser:appgroup /app/bin/proxyserver /var/app/proxyserver
+COPY --from=go-builder /app/bin/proxyserver /var/app/proxyserver
 RUN chmod +x /var/app/proxyserver
 
-USER appuser
+# Copy entrypoint script for dynamic Unraid PUID/PGID support
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-ENV DATA_DIR=/data
-ENV CONFIG_PATH=/data/config.json
-ENV CERT_DIR=/data/certs
-ENV ADMIN_PORT=8080
-ENV HTTP_PORT=9080
-ENV HTTPS_PORT=9443
+# Unraid Default Permissions: PUID 99 (nobody), PGID 100 (users)
+ENV PUID=99 \
+    PGID=100 \
+    DATA_DIR=/data \
+    CONFIG_PATH=/data/config.json \
+    CERT_DIR=/data/certs \
+    ADMIN_PORT=8080 \
+    HTTP_PORT=9080 \
+    HTTPS_PORT=9443
 
 EXPOSE 8080 9080 9443
 
@@ -65,4 +73,4 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/api/health || exit 1
 
-ENTRYPOINT ["/var/app/proxyserver"]
+ENTRYPOINT ["/entrypoint.sh"]

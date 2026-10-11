@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>ProxyServer</Name>
+  <Repository>sebmak/proxyserver:latest</Repository>
+  <Registry>https://hub.docker.com/r/sebmak/proxyserver</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/sebmak/ProxyServer/issues</Support>
+  <Project>https://github.com/sebmak/ProxyServer</Project>
+  <Overview>
+    High-performance Reverse Proxy Gateway &amp; Automated Cloudflare Dynamic DNS (DDNS) Manager.
+
+    Features:
+    - Zero-downtime dynamic reverse proxy routing without restarting
+    - Replaces standalone containers like oznu/docker-cloudflare-ddns
+    - Automated Let's Encrypt ACME SSL certificates &amp; HTTPS redirection
+    - Modern dark-mode React UI with live traffic telemetry &amp; health checks
+    - Administrator authentication, rate limiting, and gateway access protection
+  </Overview>
+  <Category>Network:Web Network:DNS Security: Status:Stable</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/sebmak/ProxyServer/main/unraid/ProxyServer.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/sebmak/ProxyServer/main/assets/logo.png</Icon>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <DateInstalled>2026-10-10</DateInstalled>
+
+  <!-- Port: Web Management UI -->
+  <Config Name="Web Management UI Port" Target="8080" Default="8080" Mode="tcp" Description="Port for Web Management UI and Admin REST API" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+
+  <!-- Port: HTTP Reverse Proxy -->
+  <Config Name="HTTP Reverse Proxy Port" Target="9080" Default="9080" Mode="tcp" Description="HTTP Reverse Proxy port &amp; Let's Encrypt ACME challenges (can be mapped to Host 80 if available)" Type="Port" Display="always" Required="true" Mask="false">9080</Config>
+
+  <!-- Port: HTTPS Reverse Proxy -->
+  <Config Name="HTTPS Reverse Proxy Port" Target="9443" Default="9443" Mode="tcp" Description="HTTPS Reverse Proxy port with TLS (can be mapped to Host 443 if available)" Type="Port" Display="always" Required="true" Mask="false">9443</Config>
+
+  <!-- Path: AppData Storage -->
+  <Config Name="AppData Storage Path" Target="/data" Default="/mnt/user/appdata/proxyserver" Mode="rw" Description="Host directory for persistent config (config.json) and TLS certificates" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/proxyserver</Config>
+
+  <!-- Variable: PUID -->
+  <Config Name="PUID" Target="PUID" Default="99" Description="User ID for file permissions (Unraid 'nobody' is 99)" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+
+  <!-- Variable: PGID -->
+  <Config Name="PGID" Target="PGID" Default="100" Description="Group ID for file permissions (Unraid 'users' is 100)" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+</Container>
