@@ -208,7 +208,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
               </div>
             )}
 
-            <form onSubmit={handleSaveTLS}>
+            <form
+              onSubmit={handleSaveTLS}
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+            >
               <div className="form-group">
                 <label className="form-label">Certificate Mode</label>
                 <select
@@ -292,34 +297,61 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
               </div>
             )}
 
-            <form onSubmit={handleChangePassword}>
+            <form
+              onSubmit={handleChangePassword}
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              autoComplete="off"
+            >
               <div className="form-group">
                 <label className="form-label">Current Password</label>
                 <input
+                  id="settings-cur-password"
+                  name="cur_pwd_ignore"
                   type="password"
                   className="input"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="off"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   required
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">New Password</label>
                 <input
+                  id="settings-new-password"
+                  name="new_pwd_ignore"
                   type="password"
                   className="input"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   required
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Confirm New Password</label>
                 <input
+                  id="settings-conf-password"
+                  name="conf_pwd_ignore"
                   type="password"
                   className="input"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   required
                 />
               </div>
@@ -370,7 +402,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
               </button>
 
               {showLegacyPaste && (
-                <form onSubmit={handleImportLegacy} style={{ background: '#0e131d', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginTop: '0.25rem' }}>
+                <form
+                  onSubmit={handleImportLegacy}
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  style={{ background: '#0e131d', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginTop: '0.25rem' }}
+                >
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Legacy servers.json JSON payload</label>
                   <textarea
                     id="settings-legacy-payload"

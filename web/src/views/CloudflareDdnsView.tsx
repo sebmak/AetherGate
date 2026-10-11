@@ -8,6 +8,8 @@ import {
   Layers,
   Clock,
   ShieldAlert,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import type { DDNSStatus, CloudflareConfig, CFZone } from '../types'
 import { api } from '../services/api'
@@ -38,6 +40,8 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
   const [intervalSec, setIntervalSec] = useState(300)
   const [autoSyncProxies, setAutoSyncProxies] = useState(true)
   const [customDomains, setCustomDomains] = useState('')
+  const [showToken, setShowToken] = useState(false)
+  const [showKey, setShowKey] = useState(false)
 
   const [availableZones, setAvailableZones] = useState<CFZone[]>([])
   const [isTestingToken, setIsTestingToken] = useState(false)
@@ -295,7 +299,13 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
             </div>
           )}
 
-          <form onSubmit={handleSaveConfig}>
+          <form
+            onSubmit={handleSaveConfig}
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-bwignore="true"
+            autoComplete="off"
+          >
             {/* Auth Method Tabs */}
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
               <button
@@ -327,13 +337,43 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type="password"
-                    className="input input-mono"
-                    placeholder={config?.api_token ? "•••••••••••••••• (Leave blank to keep current)" : "Enter your Cloudflare Bearer API token"}
-                    value={apiToken}
-                    onChange={(e) => setApiToken(e.target.value)}
-                  />
+                  <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                    <input
+                      id="cf-api-token"
+                      name="cf_secret_token"
+                      type={showToken ? 'text' : 'password'}
+                      className="input input-mono"
+                      style={{ paddingRight: '2.5rem' }}
+                      placeholder={config?.api_token ? "•••••••••••••••• (Leave blank to keep current)" : "Enter your Cloudflare Bearer API token"}
+                      value={apiToken}
+                      onChange={(e) => setApiToken(e.target.value)}
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken(!showToken)}
+                      title={showToken ? "Hide token" : "Show token"}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={handleTestToken}
@@ -386,13 +426,43 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                      type="password"
-                      className="input input-mono"
-                      placeholder={config?.api_key ? "•••••••••••••••• (Leave blank to keep current)" : "Enter your Cloudflare Global API Key"}
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                    />
+                    <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                      <input
+                        id="cf-api-key"
+                        name="cf_secret_key"
+                        type={showKey ? 'text' : 'password'}
+                        className="input input-mono"
+                        style={{ paddingRight: '2.5rem' }}
+                        placeholder={config?.api_key ? "•••••••••••••••• (Leave blank to keep current)" : "Enter your Cloudflare Global API Key"}
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        data-1p-ignore="true"
+                        data-lpignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        title={showKey ? "Hide key" : "Show key"}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={handleTestToken}
@@ -407,11 +477,18 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
                 <div className="form-group">
                   <label className="form-label">Cloudflare Account Email</label>
                   <input
+                    id="cf-account-email"
+                    name="cf_account_email"
                     type="email"
                     className="input"
                     placeholder="email@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    data-1p-ignore="true"
+                    data-lpignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
+                    autoComplete="off"
                   />
                   <div className="form-helper">Required when using Global API Key.</div>
                 </div>

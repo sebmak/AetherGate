@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import type { ProxyTarget, StatsResponse, DDNSStatus, CloudflareConfig } from './types'
 import { api } from './services/api'
+import { getViewFromPath, getPathForView, getViewTitle, type ViewTab } from './router'
 import { Sidebar } from './components/Sidebar'
 import { Navbar } from './components/Navbar'
 import { ProxyModal } from './components/ProxyModal'
@@ -16,7 +17,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [isSetupRequired, setIsSetupRequired] = useState(false)
   const [username, setUsername] = useState('Admin')
-  const [currentView, setCurrentView] = useState('dashboard')
+  const [currentView, setCurrentView] = useState<ViewTab>(() => getViewFromPath(window.location.pathname))
 
   // Global State
   const [proxies, setProxies] = useState<ProxyTarget[]>([])
@@ -151,6 +152,41 @@ export const App: React.FC = () => {
     }
   }
 
+  // Client-side Navigation
+  const navigateTo = useCallback((view: ViewTab | string, replace = false) => {
+    const targetView = (['dashboard', 'proxies', 'ddns', 'logs', 'settings'].includes(view as any)
+      ? view
+      : getViewFromPath(view)) as ViewTab
+
+    const targetPath = getPathForView(targetView)
+
+    if (window.location.pathname !== targetPath) {
+      if (replace) {
+        window.history.replaceState({ view: targetView }, '', targetPath)
+      } else {
+        window.history.pushState({ view: targetView }, '', targetPath)
+      }
+    }
+
+    document.title = getViewTitle(targetView)
+    setCurrentView(targetView)
+  }, [])
+
+  // Browser history popstate (Back / Forward buttons)
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const view = e.state?.view || getViewFromPath(window.location.pathname)
+      setCurrentView(view)
+      document.title = getViewTitle(view)
+    }
+
+    const initialView = getViewFromPath(window.location.pathname)
+    document.title = getViewTitle(initialView)
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
   const handleLogout = async () => {
     await api.logout()
     setIsAuthenticated(false)
@@ -185,7 +221,7 @@ export const App: React.FC = () => {
       {/* Sidebar */}
       <Sidebar
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        onNavigate={navigateTo}
         uptimeSeconds={stats?.uptime_seconds ?? 0}
       />
 
@@ -215,7 +251,7 @@ export const App: React.FC = () => {
                 setProxyModalOpen(true)
               }}
               onSyncDDNS={handleSyncDDNS}
-              onNavigate={setCurrentView}
+              onNavigate={navigateTo}
               isSyncingDDNS={isSyncingDDNS}
             />
           )}

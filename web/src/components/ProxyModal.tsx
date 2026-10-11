@@ -207,7 +207,12 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit}
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+        >
           {/* Friendly Name */}
           <div className="form-group">
             <label className="form-label">Friendly Name</label>

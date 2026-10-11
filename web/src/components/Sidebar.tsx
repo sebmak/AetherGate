@@ -8,21 +8,21 @@ import {
 
 interface SidebarProps {
   currentView: string
-  setCurrentView: (view: string) => void
+  onNavigate: (view: string) => void
   uptimeSeconds: number
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
-  setCurrentView,
+  onNavigate,
   uptimeSeconds,
 }) => {
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'proxies', label: 'Reverse Proxies', icon: Server },
-    { id: 'ddns', label: 'Cloudflare DDNS', icon: Cloud },
-    { id: 'logs', label: 'Live Traffic Logs', icon: Activity },
-    { id: 'settings', label: 'Settings & Security', icon: Settings },
+    { id: 'dashboard', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'proxies', path: '/proxies', label: 'Reverse Proxies', icon: Server },
+    { id: 'ddns', path: '/ddns', label: 'Cloudflare DDNS', icon: Cloud },
+    { id: 'logs', path: '/logs', label: 'Live Traffic Logs', icon: Activity },
+    { id: 'settings', path: '/settings', label: 'Settings & Security', icon: Settings },
   ]
 
   const formatUptime = (sec: number) => {
@@ -36,7 +36,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="sidebar">
       {/* Brand Header */}
-      <div style={{ padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div
+        onClick={() => onNavigate('dashboard')}
+        style={{
+          padding: '1.25rem 1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          borderBottom: '1px solid var(--border-subtle)',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        title="ProxyServer Gateway (Go to Dashboard)"
+      >
         <img
           src="/icon.png"
           alt="ProxyServer Logo"
@@ -64,17 +76,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const Icon = item.icon
           const isActive = currentView === item.id
           return (
-            <button
+            <a
               key={item.id}
               id={`nav-${item.id}`}
-              onClick={() => setCurrentView(item.id)}
+              href={item.path}
+              onClick={(e) => {
+                if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) {
+                  e.preventDefault()
+                  onNavigate(item.id)
+                }
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.85rem',
                 padding: '0.65rem 0.85rem',
                 borderRadius: 'var(--radius-md)',
-                border: 'none',
+                textDecoration: 'none',
                 background: isActive ? '#1c2538' : 'transparent',
                 color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                 fontWeight: isActive ? 600 : 500,
@@ -82,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 cursor: 'pointer',
                 textAlign: 'left',
                 width: '100%',
-                transition: 'background-color 0.15s',
+                transition: 'background-color 0.15s, color 0.15s',
                 borderLeft: isActive ? '3px solid var(--accent-cyan)' : '3px solid transparent',
               }}
               onMouseEnter={(e) => {
@@ -100,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Icon size={18} color={isActive ? 'var(--accent-cyan)' : 'currentColor'} />
               <span className="nav-text">{item.label}</span>
-            </button>
+            </a>
           )
         })}
       </nav>
