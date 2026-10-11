@@ -63,18 +63,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 60%), #080c14',
+      backgroundColor: 'var(--bg-primary)',
       padding: '1.5rem',
     }}>
       <div style={{
         width: '100%',
         maxWidth: '420px',
-        background: 'rgba(15, 23, 42, 0.85)',
-        border: '1px solid rgba(56, 189, 248, 0.2)',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-card)',
         borderRadius: 'var(--radius-xl)',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(56, 189, 248, 0.12)',
-        padding: '2.5rem',
+        boxShadow: 'var(--shadow-md)',
+        padding: '2.25rem',
       }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -82,16 +81,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
             src="/icon.png"
             alt="ProxyServer Logo"
             style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '16px',
+              width: '60px',
+              height: '60px',
+              borderRadius: '12px',
               marginBottom: '1rem',
-              boxShadow: '0 0 32px rgba(56, 189, 248, 0.45)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              border: '1px solid var(--border-subtle)',
               objectFit: 'cover',
             }}
           />
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', marginBottom: '0.35rem' }}>
+          <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', marginBottom: '0.35rem' }}>
             {isSetup ? 'Initial Security Setup' : 'ProxyServer Gateway'}
           </h1>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
@@ -103,11 +101,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
 
         {error && (
           <div style={{
-            background: 'rgba(244, 63, 94, 0.12)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
+            background: '#2e141a',
+            border: '1px solid #7f1d1d',
             borderRadius: 'var(--radius-md)',
             padding: '0.75rem 1rem',
-            color: '#fca5a5',
+            color: '#f87171',
             fontSize: '0.8125rem',
             display: 'flex',
             alignItems: 'center',
@@ -201,9 +199,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
                   <div style={{
                     marginTop: '0.65rem',
                     padding: '0.85rem',
-                    background: 'rgba(11, 19, 38, 0.75)',
+                    background: 'var(--bg-input)',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    border: '1px solid var(--border-subtle)',
                   }}>
                     <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
                       <span>Paste Legacy servers.json</span>

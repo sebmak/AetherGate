@@ -195,11 +195,11 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
 
         {error && (
           <div style={{
-            background: 'rgba(244, 63, 94, 0.15)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
+            background: '#2e141a',
+            border: '1px solid #7f1d1d',
             borderRadius: 'var(--radius-md)',
             padding: '0.75rem 1rem',
-            color: '#fca5a5',
+            color: '#f87171',
             fontSize: '0.875rem',
             marginBottom: '1.25rem',
           }}>
@@ -266,7 +266,7 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
 
           {/* Connectivity Test Bar */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: '#0e131d',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
             padding: '0.85rem 1rem',
@@ -314,7 +314,7 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
             display: 'flex',
             flexDirection: 'column',
             gap: '1rem',
-            background: 'rgba(15, 23, 42, 0.5)',
+            background: '#0e131d',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
             padding: '1.25rem',
@@ -407,7 +407,7 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
             </div>
             {customHeaders.map((h, idx) => (
               <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
-                <span style={{ flex: 1, padding: '0.4rem 0.6rem', background: '#111a2e', borderRadius: '4px', fontSize: '0.8rem', fontFamily: 'monospace' }}>
+                <span style={{ flex: 1, padding: '0.4rem 0.6rem', background: '#0e131d', border: '1px solid var(--border-subtle)', borderRadius: '4px', fontSize: '0.8rem', fontFamily: 'monospace' }}>
                   {h.key}: {h.value}
                 </span>
                 <button

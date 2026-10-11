@@ -103,21 +103,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Cloudflare DDNS Banner */}
-      <div className="card" style={{ marginBottom: '2rem', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.4))' }}>
+      <div className="card" style={{ marginBottom: '1.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '12px',
-              background: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              width: '42px',
+              height: '42px',
+              borderRadius: 'var(--radius-md)',
+              background: '#0c283d',
+              border: '1px solid #0369a1',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--accent-cyan)',
             }}>
-              <Cloud size={24} />
+              <Cloud size={22} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>

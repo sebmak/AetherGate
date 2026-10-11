@@ -218,9 +218,9 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
             marginTop: '1.25rem',
             padding: '0.75rem 1rem',
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(244, 63, 94, 0.12)',
-            border: '1px solid rgba(244, 63, 94, 0.25)',
-            color: '#fca5a5',
+            background: '#2e141a',
+            border: '1px solid #7f1d1d',
+            color: '#f87171',
             fontSize: '0.8125rem',
             display: 'flex',
             alignItems: 'center',
@@ -252,11 +252,11 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
 
           {saveSuccess && (
             <div style={{
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              background: '#0f291e',
+              border: '1px solid #165b3d',
               borderRadius: 'var(--radius-md)',
               padding: '0.75rem 1rem',
-              color: '#6ee7b7',
+              color: '#34d399',
               fontSize: '0.875rem',
               marginBottom: '1.25rem',
             }}>
@@ -266,11 +266,11 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
 
           {error && (
             <div style={{
-              background: 'rgba(244, 63, 94, 0.15)',
-              border: '1px solid rgba(244, 63, 94, 0.3)',
+              background: '#2e141a',
+              border: '1px solid #7f1d1d',
               borderRadius: 'var(--radius-md)',
               padding: '0.75rem 1rem',
-              color: '#fca5a5',
+              color: '#f87171',
               fontSize: '0.875rem',
               marginBottom: '1.25rem',
             }}>
@@ -435,7 +435,7 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
 
             {/* Auto-Sync Proxies Checkbox */}
             <div style={{
-              background: 'rgba(255, 255, 255, 0.02)',
+              background: '#0e131d',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
               padding: '1rem',
@@ -569,7 +569,7 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
                     style={{
                       padding: '0.75rem',
                       borderRadius: 'var(--radius-md)',
-                      background: 'rgba(255, 255, 255, 0.02)',
+                      background: '#0e131d',
                       border: '1px solid var(--border-subtle)',
                       display: 'flex',
                       alignItems: 'center',

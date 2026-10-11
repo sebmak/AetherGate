@@ -18,29 +18,29 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 }) => {
   const colorMap = {
     cyan: {
-      bg: 'rgba(56, 189, 248, 0.12)',
-      border: 'rgba(56, 189, 248, 0.25)',
-      text: 'var(--accent-cyan)',
+      bg: '#0c283d',
+      border: '#0369a1',
+      text: '#38bdf8',
     },
     emerald: {
-      bg: 'rgba(16, 185, 129, 0.12)',
-      border: 'rgba(16, 185, 129, 0.25)',
-      text: 'var(--accent-emerald)',
+      bg: '#0f291e',
+      border: '#165b3d',
+      text: '#34d399',
     },
     amber: {
-      bg: 'rgba(245, 158, 11, 0.12)',
-      border: 'rgba(245, 158, 11, 0.25)',
-      text: 'var(--accent-amber)',
+      bg: '#2c200e',
+      border: '#78350f',
+      text: '#fbbf24',
     },
     rose: {
-      bg: 'rgba(244, 63, 94, 0.12)',
-      border: 'rgba(244, 63, 94, 0.25)',
-      text: 'var(--accent-rose)',
+      bg: '#2e141a',
+      border: '#7f1d1d',
+      text: '#f87171',
     },
     purple: {
-      bg: 'rgba(139, 92, 246, 0.12)',
-      border: 'rgba(139, 92, 246, 0.25)',
-      text: 'var(--accent-purple)',
+      bg: '#231536',
+      border: '#6b21a8',
+      text: '#c084fc',
     },
   }
 

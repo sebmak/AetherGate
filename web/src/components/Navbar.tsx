@@ -48,15 +48,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.4rem 0.85rem',
-              borderRadius: '9999px',
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
+              padding: '0.35rem 0.75rem',
+              borderRadius: 'var(--radius-md)',
+              background: '#0c283d',
+              border: '1px solid #0369a1',
               cursor: 'pointer',
               fontSize: '0.8125rem',
               color: 'var(--accent-cyan)',
               fontFamily: "'JetBrains Mono', monospace",
-              transition: 'all 0.2s',
+              transition: 'background-color 0.15s',
             }}
           >
             <Globe size={14} />
@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Right side: Actions & User */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <button
           id="btn-refresh-global"
           onClick={onRefresh}
@@ -95,21 +95,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           gap: '0.65rem',
           padding: '0.35rem 0.75rem',
           borderRadius: 'var(--radius-md)',
-          background: 'rgba(255, 255, 255, 0.03)',
+          background: '#161e2b',
           border: '1px solid var(--border-subtle)',
           fontSize: '0.8125rem',
           color: 'var(--text-primary)',
         }}>
           <div style={{
-            width: '24px',
-            height: '24px',
+            width: '22px',
+            height: '22px',
             borderRadius: '50%',
-            background: 'rgba(59, 130, 246, 0.2)',
+            background: 'var(--accent-blue)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <User size={13} color="var(--accent-cyan)" />
+            <User size={13} color="#fff" />
           </div>
           <span style={{ fontWeight: 600 }}>{username || 'Admin'}</span>
           <span title="Admin verified" style={{ display: 'inline-flex' }}>

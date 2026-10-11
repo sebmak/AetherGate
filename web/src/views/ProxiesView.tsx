@@ -220,8 +220,8 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
                           fontFamily: 'monospace',
                           fontSize: '0.8125rem',
                           color: '#38bdf8',
-                          background: 'rgba(56, 189, 248, 0.08)',
-                          border: '1px solid rgba(56, 189, 248, 0.2)',
+                          background: '#0c283d',
+                          border: '1px solid #0369a1',
                           padding: '0.25rem 0.6rem',
                           borderRadius: '4px',
                         }}>

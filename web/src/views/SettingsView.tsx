@@ -161,13 +161,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
                   :{settings?.admin_port || 8080}
                 </div>
               </div>
-              <div style={{ background: '#111a2e', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ background: '#0e131d', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>HTTP Reverse Proxy</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
                   :{settings?.http_port || 9080}
                 </div>
               </div>
-              <div style={{ background: '#111a2e', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ background: '#0e131d', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>HTTPS Reverse Proxy</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#34d399', fontFamily: 'monospace' }}>
                   :{settings?.https_port || 9443}
@@ -190,12 +190,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
             </div>
 
             {tlsSuccess && (
-              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#6ee7b7', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#0f291e', border: '1px solid #165b3d', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#34d399', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 TLS settings updated successfully!
               </div>
             )}
             {tlsError && (
-              <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#fca5a5', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#2e141a', border: '1px solid #7f1d1d', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#f87171', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 {tlsError}
               </div>
             )}
@@ -272,12 +272,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
             </div>
 
             {passSuccess && (
-              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#6ee7b7', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#0f291e', border: '1px solid #165b3d', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#34d399', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 Password changed successfully!
               </div>
             )}
             {passError && (
-              <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#fca5a5', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#2e141a', border: '1px solid #7f1d1d', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#f87171', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 {passError}
               </div>
             )}
@@ -333,12 +333,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
             </p>
 
             {legacySuccess && (
-              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#6ee7b7', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#0f291e', border: '1px solid #165b3d', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#34d399', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 Successfully imported {legacySuccess.count} route(s) into ProxyServer!
               </div>
             )}
             {legacyError && (
-              <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#fca5a5', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#2e141a', border: '1px solid #7f1d1d', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#f87171', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 {legacyError}
               </div>
             )}
@@ -360,7 +360,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
               </button>
 
               {showLegacyPaste && (
-                <form onSubmit={handleImportLegacy} style={{ background: '#111a2e', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '0.25rem' }}>
+                <form onSubmit={handleImportLegacy} style={{ background: '#0e131d', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginTop: '0.25rem' }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Legacy servers.json JSON payload</label>
                   <textarea
                     id="settings-legacy-payload"
