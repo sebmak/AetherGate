@@ -443,6 +443,10 @@ func (s *Server) handleDDNSStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func isMasked(s string) bool {
+	return strings.Contains(s, "*") || strings.Contains(s, "•")
+}
+
 func (s *Server) handleDDNSConfig(w http.ResponseWriter, r *http.Request) {
 	var req store.CloudflareConfig
 	if err := readJSON(r, &req); err != nil {
@@ -451,12 +455,28 @@ func (s *Server) handleDDNSConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	current := s.store.GetCloudflareConfig()
+
+	req.ApiToken = strings.TrimSpace(req.ApiToken)
+	req.ApiKey = strings.TrimSpace(req.ApiKey)
+	req.Email = strings.TrimSpace(req.Email)
+	req.ZoneID = strings.TrimSpace(req.ZoneID)
+	req.ZoneName = strings.TrimSpace(req.ZoneName)
+
 	// If submitted token is masked or empty, retain current token
-	if strings.HasPrefix(req.ApiToken, "***") || req.ApiToken == "" {
+	if isMasked(req.ApiToken) || (req.ApiToken == "" && req.ApiKey == "") {
 		req.ApiToken = current.ApiToken
 	}
-	if strings.HasPrefix(req.ApiKey, "***") || req.ApiKey == "" {
+	if isMasked(req.ApiKey) {
 		req.ApiKey = current.ApiKey
+	}
+
+	// Auto-resolve: if ApiKey is provided without ApiToken and without Email, it's an API Token!
+	if req.ApiToken == "" && req.ApiKey != "" && req.Email == "" {
+		req.ApiToken = req.ApiKey
+	}
+	// If ApiToken is provided with Email, sync to ApiKey as well
+	if req.ApiKey == "" && req.ApiToken != "" && req.Email != "" {
+		req.ApiKey = req.ApiToken
 	}
 
 	if err := s.store.SaveCloudflareConfig(req); err != nil {
@@ -480,6 +500,8 @@ func (s *Server) handleDDNSSync(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDDNSTestToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ApiToken string `json:"api_token"`
+		ApiKey   string `json:"api_key"`
+		Email    string `json:"email"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Invalid request body"})
@@ -488,8 +510,14 @@ func (s *Server) handleDDNSTestToken(w http.ResponseWriter, r *http.Request) {
 
 	current := s.store.GetCloudflareConfig()
 	token := strings.TrimSpace(req.ApiToken)
-	if token == "" || strings.HasPrefix(token, "***") {
+	if token == "" {
+		token = strings.TrimSpace(req.ApiKey)
+	}
+	if token == "" || isMasked(token) {
 		token = strings.TrimSpace(current.ApiToken)
+		if token == "" {
+			token = strings.TrimSpace(current.ApiKey)
+		}
 	}
 
 	if token == "" {
@@ -497,7 +525,16 @@ func (s *Server) handleDDNSTestToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	testCfg := store.CloudflareConfig{ApiToken: token}
+	email := strings.TrimSpace(req.Email)
+	if email == "" && isMasked(req.ApiToken) {
+		email = strings.TrimSpace(current.Email)
+	}
+
+	testCfg := store.CloudflareConfig{
+		ApiToken: token,
+		ApiKey:   token,
+		Email:    email,
+	}
 
 	// 1. Verify token status via /user/tokens/verify
 	valid, verifyErr := s.ddnsManager.VerifyToken(r.Context(), token)

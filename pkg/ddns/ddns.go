@@ -235,7 +235,12 @@ func (m *Manager) Sync(ctx context.Context) error {
 		return nil
 	}
 
-	if cfg.ApiToken == "" && (cfg.ApiKey == "" || cfg.Email == "") {
+	token := strings.TrimSpace(cfg.ApiToken)
+	if token == "" {
+		token = strings.TrimSpace(cfg.ApiKey)
+	}
+
+	if token == "" {
 		err := errors.New("cloudflare API credentials not configured")
 		m.recordError(err.Error())
 		return err
@@ -451,11 +456,17 @@ func (m *Manager) cfRequest(ctx context.Context, cfg store.CloudflareConfig, met
 		return nil, err
 	}
 
-	if cfg.ApiToken != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.ApiToken)
-	} else if cfg.ApiKey != "" && cfg.Email != "" {
-		req.Header.Set("X-Auth-Key", cfg.ApiKey)
-		req.Header.Set("X-Auth-Email", cfg.Email)
+	token := strings.TrimSpace(cfg.ApiToken)
+	if token == "" {
+		token = strings.TrimSpace(cfg.ApiKey)
+	}
+	email := strings.TrimSpace(cfg.Email)
+
+	if token != "" && email == "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else if token != "" && email != "" {
+		req.Header.Set("X-Auth-Key", token)
+		req.Header.Set("X-Auth-Email", email)
 	} else {
 		return nil, errors.New("no Cloudflare credentials provided")
 	}

@@ -49,42 +49,46 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
   useEffect(() => {
     if (config) {
       setEnabled(config.enabled)
-      setApiToken(config.api_token || '')
-      setApiKey(config.api_key || '')
-      setEmail(config.email || '')
+      if (!apiToken && config.api_token) {
+        setApiToken(config.api_token)
+      }
+      if (!apiKey && config.api_key) {
+        setApiKey(config.api_key)
+      }
+      if (!email && config.email) {
+        setEmail(config.email)
+      }
       if (config.api_key && !config.api_token) {
         setAuthMethod('key')
-      } else {
-        setAuthMethod('token')
       }
-      setZoneId(config.zone_id || '')
-      setZoneName(config.zone_name || '')
+      if (config.zone_id && !zoneId) {
+        setZoneId(config.zone_id)
+      }
+      if (config.zone_name && !zoneName) {
+        setZoneName(config.zone_name)
+      }
       setProxied(config.proxied ?? true)
       setIntervalSec(config.interval_seconds || 300)
       setAutoSyncProxies(config.auto_sync_proxies ?? true)
-      setCustomDomains(config.domains ? config.domains.join(', ') : '')
+      if (!customDomains && config.domains) {
+        setCustomDomains(config.domains.join(', '))
+      }
     }
   }, [config])
 
   const handleTestToken = async () => {
-    const tokenToTest = apiToken.trim()
-    if (!tokenToTest) {
-      setTokenVerifyMessage({
-        success: false,
-        message: 'Please enter a Cloudflare API token first',
-      })
-      return
-    }
+    const tokenToTest = (authMethod === 'token' ? apiToken : apiKey).trim()
+    const emailToTest = email.trim()
 
     setIsTestingToken(true)
     setTokenVerifyMessage(null)
     setError('')
     try {
-      const res = await api.testCloudflareToken(tokenToTest)
+      const res = await api.testCloudflareToken(tokenToTest, apiKey.trim(), emailToTest)
       if (res.valid) {
         setTokenVerifyMessage({
           success: true,
-          message: res.warning ? `Token verified! (${res.warning})` : 'Cloudflare API Token verified successfully!',
+          message: res.warning ? `Verified! (${res.warning})` : 'Cloudflare credentials verified successfully!',
         })
         if (res.zones && res.zones.length > 0) {
           setAvailableZones(res.zones)
@@ -96,13 +100,13 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
       } else {
         setTokenVerifyMessage({
           success: false,
-          message: res.error || 'Token verification failed',
+          message: res.error || 'Verification failed',
         })
       }
     } catch (err: any) {
       setTokenVerifyMessage({
         success: false,
-        message: err.message || 'Token verification failed',
+        message: err.message || 'Verification failed',
       })
     } finally {
       setIsTestingToken(false)
@@ -120,12 +124,16 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean)
 
+    // Preserve credentials and auto-resolve
+    const submittedToken = authMethod === 'token' ? apiToken.trim() : (apiKey.trim() && !email.trim() ? apiKey.trim() : '')
+    const submittedKey = authMethod === 'key' ? apiKey.trim() : ''
+
     try {
       await api.updateDDNSConfig({
         enabled,
-        api_token: authMethod === 'token' ? apiToken.trim() : '',
-        api_key: authMethod === 'key' ? apiKey.trim() : '',
-        email: authMethod === 'key' ? email.trim() : '',
+        api_token: submittedToken,
+        api_key: submittedKey,
+        email: email.trim(),
         zone_id: zoneId.trim(),
         zone_name: zoneName.trim(),
         proxied,
@@ -310,19 +318,26 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
 
             {authMethod === 'token' ? (
               <div className="form-group">
-                <label className="form-label">Cloudflare API Token</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>Cloudflare API Token</label>
+                  {config?.api_token && (
+                    <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem' }}>
+                      <CheckCircle2 size={11} /> Saved in system
+                    </span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="password"
                     className="input input-mono"
-                    placeholder="Enter your Cloudflare Bearer API token"
+                    placeholder={config?.api_token ? "•••••••••••••••• (Leave blank to keep current)" : "Enter your Cloudflare Bearer API token"}
                     value={apiToken}
                     onChange={(e) => setApiToken(e.target.value)}
                   />
                   <button
                     type="button"
                     onClick={handleTestToken}
-                    disabled={isTestingToken || !apiToken}
+                    disabled={isTestingToken || (!apiToken && !config?.api_token)}
                     className="btn btn-secondary"
                     style={{ whiteSpace: 'nowrap', fontSize: '0.8125rem' }}
                   >
@@ -362,14 +377,32 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
             ) : (
               <>
                 <div className="form-group">
-                  <label className="form-label">Global API Key</label>
-                  <input
-                    type="password"
-                    className="input input-mono"
-                    placeholder="Enter your Cloudflare Global API Key"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>Global API Key</label>
+                    {config?.api_key && (
+                      <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem' }}>
+                        <CheckCircle2 size={11} /> Saved in system
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="password"
+                      className="input input-mono"
+                      placeholder={config?.api_key ? "•••••••••••••••• (Leave blank to keep current)" : "Enter your Cloudflare Global API Key"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTestToken}
+                      disabled={isTestingToken || (!apiKey && !config?.api_key)}
+                      className="btn btn-secondary"
+                      style={{ whiteSpace: 'nowrap', fontSize: '0.8125rem' }}
+                    >
+                      {isTestingToken ? 'Verifying...' : 'Verify Credentials'}
+                    </button>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Cloudflare Account Email</label>
@@ -380,7 +413,26 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
+                  <div className="form-helper">Required when using Global API Key.</div>
                 </div>
+                {tokenVerifyMessage && (
+                  <div style={{
+                    marginBottom: '1.25rem',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: tokenVerifyMessage.success ? '#0f291e' : '#2e141a',
+                    border: `1px solid ${tokenVerifyMessage.success ? '#165b3d' : '#7f1d1d'}`,
+                    color: tokenVerifyMessage.success ? '#34d399' : '#f87171',
+                    fontSize: '0.8125rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontWeight: 600,
+                  }}>
+                    {tokenVerifyMessage.success ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    <span>{tokenVerifyMessage.message}</span>
+                  </div>
+                )}
               </>
             )}
 
