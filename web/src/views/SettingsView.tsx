@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   Settings,
   Shield,
+  ShieldCheck,
   Download,
   Lock,
   Server,
@@ -9,8 +10,11 @@ import {
   Upload,
   ChevronDown,
   ChevronRight,
+  RefreshCw,
+  AlertTriangle,
+  AlertCircle,
 } from 'lucide-react'
-import type { SystemSettings } from '../types'
+import type { SystemSettings, CertificateInfo } from '../types'
 import { api } from '../services/api'
 
 interface SettingsViewProps {
@@ -23,6 +27,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
   const [tlsEmail, setTlsEmail] = useState('')
   const [certPath, setCertPath] = useState('')
   const [keyPath, setKeyPath] = useState('')
+
+  // Certificate status & renewal state
+  const [certs, setCerts] = useState<CertificateInfo[]>([])
+  const [loadingCerts, setLoadingCerts] = useState(false)
+  const [renewingDomain, setRenewingDomain] = useState<string | null>(null)
+  const [isRenewingAll, setIsRenewingAll] = useState(false)
+  const [certActionMsg, setCertActionMsg] = useState<{ success: boolean; message: string } | null>(null)
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -42,6 +53,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
   const [showLegacyPaste, setShowLegacyPaste] = useState(false)
   const [isImportingLegacy, setIsImportingLegacy] = useState(false)
 
+  const loadCerts = async () => {
+    setLoadingCerts(true)
+    try {
+      const res = await api.getTLSCerts()
+      setCerts(res.certs || [])
+    } catch {
+      // ignore
+    } finally {
+      setLoadingCerts(false)
+    }
+  }
+
   useEffect(() => {
     api.getSettings().then((s) => {
       setSettings(s)
@@ -52,7 +75,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
         setKeyPath(s.tls.key_path || '')
       }
     }).catch(() => {})
+    loadCerts()
   }, [])
+
+  const handleRenewSingle = async (domain: string) => {
+    setRenewingDomain(domain)
+    setCertActionMsg(null)
+    try {
+      const proxies = await api.getProxies()
+      const target = proxies.find((p) => p.domain.toLowerCase() === domain.toLowerCase())
+      if (target) {
+        const res = await api.renewCertificate(target.id)
+        if (res.success) {
+          setCertActionMsg({
+            success: true,
+            message: `Certificate for ${domain} renewed successfully (${res.cert?.days_remaining ?? 0} days left).`,
+          })
+        } else {
+          setCertActionMsg({
+            success: false,
+            message: res.error || `Failed to renew certificate for ${domain}`,
+          })
+        }
+      } else {
+        setCertActionMsg({ success: false, message: `No active proxy route matching ${domain}` })
+      }
+      await loadCerts()
+      onRefresh()
+    } catch (err: any) {
+      setCertActionMsg({ success: false, message: err.message || `Renewal failed for ${domain}` })
+      await loadCerts()
+    } finally {
+      setRenewingDomain(null)
+      setTimeout(() => setCertActionMsg(null), 8000)
+    }
+  }
+
+  const handleRenewAll = async () => {
+    setIsRenewingAll(true)
+    setCertActionMsg(null)
+    try {
+      const res = await api.renewAllCertificates()
+      if (res.success) {
+        setCertActionMsg({
+          success: true,
+          message: 'All registered domain certificates were regenerated and renewed successfully!',
+        })
+      } else {
+        setCertActionMsg({
+          success: false,
+          message: res.error || 'Some domain certificates encountered errors during renewal.',
+        })
+      }
+      await loadCerts()
+      onRefresh()
+    } catch (err: any) {
+      setCertActionMsg({ success: false, message: err.message || 'Bulk certificate renewal request failed.' })
+      await loadCerts()
+    } finally {
+      setIsRenewingAll(false)
+      setTimeout(() => setCertActionMsg(null), 8000)
+    }
+  }
 
   const handleSaveTLS = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -272,6 +356,146 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
                 {isSavingTLS ? 'Saving TLS...' : 'Save TLS Configuration'}
               </button>
             </form>
+          </div>
+
+          {/* Active Domain Certificates & Renewal Management */}
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div className="card-title">
+                <ShieldCheck size={18} color="var(--accent-cyan)" />
+                Managed Domain Certificates
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={loadCerts}
+                  disabled={loadingCerts}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                  title="Reload certificates from disk"
+                >
+                  <RefreshCw size={12} className={loadingCerts ? 'spin' : ''} />
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRenewAll}
+                  disabled={isRenewingAll || certs.length === 0}
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+                  title="Regenerate all certificates with Let's Encrypt"
+                >
+                  <RefreshCw size={12} className={isRenewingAll ? 'spin' : ''} />
+                  {isRenewingAll ? 'Regenerating All...' : 'Regenerate All Certificates'}
+                </button>
+              </div>
+            </div>
+
+            {certActionMsg && (
+              <div style={{
+                background: certActionMsg.success ? '#0f291e' : '#2e141a',
+                border: `1px solid ${certActionMsg.success ? '#165b3d' : '#7f1d1d'}`,
+                padding: '0.75rem 1rem',
+                borderRadius: 'var(--radius-md)',
+                color: certActionMsg.success ? '#34d399' : '#f87171',
+                fontSize: '0.85rem',
+                marginBottom: '1rem',
+              }}>
+                {certActionMsg.message}
+              </div>
+            )}
+
+            {certs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                No active proxy routes registered. Configure reverse proxies to manage SSL/TLS certificates.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {certs.map((c) => {
+                  const isRenewing = renewingDomain === c.domain
+                  return (
+                    <div
+                      key={c.domain}
+                      style={{
+                        background: '#0d1320',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '0.85rem 1rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontWeight: 600, fontFamily: 'monospace', color: '#fff', fontSize: '0.875rem' }}>
+                            {c.domain}
+                          </span>
+                          {c.status === 'valid' && (
+                            <span className="badge badge-emerald"><ShieldCheck size={11} /> Valid • {c.days_remaining}d left</span>
+                          )}
+                          {c.status === 'expiring_soon' && (
+                            <span className="badge badge-amber"><AlertTriangle size={11} /> Expiring • {c.days_remaining}d left</span>
+                          )}
+                          {c.status === 'expired' && (
+                            <span className="badge badge-rose"><AlertCircle size={11} /> Expired</span>
+                          )}
+                          {c.status === 'self_signed' && (
+                            <span className="badge badge-cyan"><Shield size={11} /> Dev Self-Signed</span>
+                          )}
+                          {c.status === 'error' && (
+                            <span className="badge badge-rose"><AlertCircle size={11} /> Cert Error</span>
+                          )}
+                          {c.status === 'renewing' && (
+                            <span className="badge badge-cyan"><RefreshCw size={11} className="spin" /> Renewing...</span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRenewSingle(c.domain)}
+                          disabled={isRenewing || isRenewingAll}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                          title={`Force Let's Encrypt regeneration for ${c.domain}`}
+                        >
+                          <RefreshCw size={12} className={isRenewing ? 'spin' : ''} />
+                          {isRenewing ? 'Regenerating...' : 'Regenerate'}
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', fontSize: '0.75rem' }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Issuer: </span>
+                          <span style={{ color: '#fff' }}>{c.issuer || 'Let\'s Encrypt'}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Days Left: </span>
+                          <span style={{ color: c.days_remaining > 15 ? '#34d399' : '#fbbf24', fontWeight: 600 }}>
+                            {c.days_remaining} days
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Renewed: </span>
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            {c.issued_at ? new Date(c.issued_at).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Expires: </span>
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {c.last_error && (
+                        <div style={{ marginTop: '0.5rem', background: '#2e141a', border: '1px solid #7f1d1d', padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', color: '#f87171', fontSize: '0.75rem' }}>
+                          <strong>Last Renewal Error:</strong> {c.last_error}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
 

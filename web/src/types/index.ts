@@ -1,3 +1,19 @@
+export interface CertificateInfo {
+  domain: string
+  status: 'valid' | 'expiring_soon' | 'expired' | 'self_signed' | 'error' | 'renewing'
+  is_valid: boolean
+  is_self_signed: boolean
+  issuer?: string
+  subject?: string
+  issued_at?: string
+  expires_at?: string
+  days_remaining: number
+  last_error?: string
+  mode: string
+  serial?: string
+  dns_names?: string[]
+}
+
 export interface ProxyTarget {
   id: string
   name: string
@@ -13,11 +29,12 @@ export interface ProxyTarget {
   cloudflare_sync: boolean
   created_at: string
   updated_at: string
-  // Merged health status
+  // Merged health and TLS status
   is_healthy?: boolean
   latency_ms?: number
   last_checked?: string
   last_error?: string
+  tls_cert?: CertificateInfo
 }
 
 export interface DNSRecordStatus {

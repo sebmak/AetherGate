@@ -5,6 +5,7 @@ import {
   Search,
   ExternalLink,
   Shield,
+  ShieldCheck,
   Lock,
   Cloud,
   Zap,
@@ -12,6 +13,10 @@ import {
   Trash2,
   Copy,
   Check,
+  RefreshCw,
+  AlertTriangle,
+  AlertCircle,
+  X,
 } from 'lucide-react'
 import type { ProxyTarget } from '../types'
 import { api } from '../services/api'
@@ -31,12 +36,15 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
   onEditProxy,
   onDeleteProxy,
   onToggleProxy,
+  onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'disabled' | 'healthy' | 'unhealthy'>('all')
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; latency: number; message: string }>>({})
   const [copiedDomain, setCopiedDomain] = useState<string | null>(null)
+  const [renewingId, setRenewingId] = useState<string | null>(null)
+  const [certNotification, setCertNotification] = useState<{ id: string; success: boolean; message: string } | null>(null)
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -59,6 +67,38 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
       }))
     } finally {
       setTestingId(null)
+    }
+  }
+
+  const handleRenewCert = async (p: ProxyTarget) => {
+    setRenewingId(p.id)
+    setCertNotification(null)
+    try {
+      const res = await api.renewCertificate(p.id)
+      if (res.success) {
+        setCertNotification({
+          id: p.id,
+          success: true,
+          message: `Certificate for ${p.domain} renewed successfully (${res.cert?.days_remaining ?? 0} days remaining).`,
+        })
+      } else {
+        setCertNotification({
+          id: p.id,
+          success: false,
+          message: res.error || `Failed to renew certificate for ${p.domain}`,
+        })
+      }
+      onRefresh()
+    } catch (err: any) {
+      setCertNotification({
+        id: p.id,
+        success: false,
+        message: err.message || `Failed to renew certificate for ${p.domain}`,
+      })
+      onRefresh()
+    } finally {
+      setRenewingId(null)
+      setTimeout(() => setCertNotification(null), 8000)
     }
   }
 
@@ -130,6 +170,32 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
         </div>
       </div>
 
+      {/* Certificate Notification Banner */}
+      {certNotification && (
+        <div style={{
+          background: certNotification.success ? '#0f291e' : '#2e141a',
+          border: `1px solid ${certNotification.success ? '#165b3d' : '#7f1d1d'}`,
+          padding: '0.75rem 1.25rem',
+          borderRadius: 'var(--radius-md)',
+          color: certNotification.success ? '#34d399' : '#f87171',
+          fontSize: '0.85rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+        }}>
+          <span>{certNotification.message}</span>
+          <button
+            onClick={() => setCertNotification(null)}
+            className="btn btn-secondary btn-icon"
+            style={{ padding: '0.2rem', minWidth: 'auto', background: 'transparent', border: 'none' }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Proxies Table */}
       <div className="card" style={{ padding: 0 }}>
         {filtered.length === 0 ? (
@@ -156,6 +222,7 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
                   <th>Incoming Domain</th>
                   <th>Friendly Name</th>
                   <th>Upstream Target</th>
+                  <th>SSL / Certificate</th>
                   <th>Health Status</th>
                   <th>Security & Features</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
@@ -229,6 +296,75 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
                         </span>
                       </td>
 
+                      {/* SSL / Certificate */}
+                      <td>
+                        {p.tls_cert ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              {p.tls_cert.status === 'valid' && (
+                                <span className="badge badge-emerald" title={`Valid certificate. Issuer: ${p.tls_cert.issuer}`}>
+                                  <ShieldCheck size={11} /> Valid • {p.tls_cert.days_remaining}d left
+                                </span>
+                              )}
+                              {p.tls_cert.status === 'expiring_soon' && (
+                                <span className="badge badge-amber" title={`Certificate expiring soon in ${p.tls_cert.days_remaining} days`}>
+                                  <AlertTriangle size={11} /> Expiring • {p.tls_cert.days_remaining}d left
+                                </span>
+                              )}
+                              {p.tls_cert.status === 'expired' && (
+                                <span className="badge badge-rose" title="Certificate has expired">
+                                  <AlertCircle size={11} /> Expired
+                                </span>
+                              )}
+                              {p.tls_cert.status === 'self_signed' && (
+                                <span className="badge badge-cyan" title="Internal self-signed dev fallback certificate">
+                                  <Shield size={11} /> Dev Self-Signed
+                                </span>
+                              )}
+                              {p.tls_cert.status === 'error' && (
+                                <span className="badge badge-rose" title={p.tls_cert.last_error}>
+                                  <AlertCircle size={11} /> Cert Error
+                                </span>
+                              )}
+                              {p.tls_cert.status === 'renewing' && (
+                                <span className="badge badge-cyan">
+                                  <RefreshCw size={11} className="spin" /> Renewing...
+                                </span>
+                              )}
+                            </div>
+
+                            {p.tls_cert.expires_at && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                Expires: {new Date(p.tls_cert.expires_at).toLocaleDateString()} ({p.tls_cert.days_remaining}d)
+                              </div>
+                            )}
+                            {p.tls_cert.issued_at && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                Renewed: {new Date(p.tls_cert.issued_at).toLocaleDateString()}
+                              </div>
+                            )}
+                            {p.tls_cert.issuer && (
+                              <div
+                                style={{ fontSize: '0.7rem', color: 'var(--text-muted)', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                title={`Issuer: ${p.tls_cert.issuer}`}
+                              >
+                                {p.tls_cert.issuer}
+                              </div>
+                            )}
+                            {p.tls_cert.last_error && (
+                              <div
+                                style={{ fontSize: '0.7rem', color: 'var(--accent-rose)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                title={p.tls_cert.last_error}
+                              >
+                                {p.tls_cert.last_error}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="badge badge-gray">No Cert</span>
+                        )}
+                      </td>
+
                       {/* Health */}
                       <td>
                         {p.enabled ? (
@@ -286,6 +422,14 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
                       {/* Actions */}
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                          <button
+                            onClick={() => handleRenewCert(p)}
+                            disabled={renewingId === p.id}
+                            className="btn btn-secondary btn-icon"
+                            title="Regenerate / Renew SSL certificate now"
+                          >
+                            <RefreshCw size={14} className={renewingId === p.id ? 'spin' : ''} color={renewingId === p.id ? 'var(--accent-cyan)' : undefined} />
+                          </button>
                           <button
                             onClick={() => handleTestTarget(p)}
                             disabled={isBeingTested}

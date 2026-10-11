@@ -15,6 +15,7 @@ import (
 	"github.com/sebmak/proxyserver/pkg/logger"
 	"github.com/sebmak/proxyserver/pkg/proxy"
 	"github.com/sebmak/proxyserver/pkg/store"
+	"github.com/sebmak/proxyserver/pkg/tlsmanager"
 )
 
 // Server handles the Management API and Web UI serving
@@ -23,18 +24,20 @@ type Server struct {
 	store       *store.Store
 	proxyEngine *proxy.Engine
 	ddnsManager *ddns.Manager
+	tlsManager  *tlsmanager.Manager
 	rateLimiter *auth.RateLimiter
 	mux         *http.ServeMux
 	startTime   time.Time
 }
 
 // NewServer creates a new API Server
-func NewServer(cfg *config.AppConfig, s *store.Store, pe *proxy.Engine, dm *ddns.Manager) *Server {
+func NewServer(cfg *config.AppConfig, s *store.Store, pe *proxy.Engine, dm *ddns.Manager, tm *tlsmanager.Manager) *Server {
 	srv := &Server{
 		cfg:         cfg,
 		store:       s,
 		proxyEngine: pe,
 		ddnsManager: dm,
+		tlsManager:  tm,
 		rateLimiter: auth.NewRateLimiter(5, 1*time.Minute),
 		mux:         http.NewServeMux(),
 		startTime:   time.Now(),
@@ -105,6 +108,11 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /api/settings/export", RequireAdminAuth(s.store, s.handleExportConfig))
 	s.mux.HandleFunc("POST /api/settings/import", RequireAdminAuth(s.store, s.handleImportConfig))
 	s.mux.HandleFunc("POST /api/settings/import-legacy", RequireAdminAuth(s.store, s.handleImportLegacy))
+
+	// TLS Certificate Management
+	s.mux.HandleFunc("POST /api/proxies/{id}/renew-cert", RequireAdminAuth(s.store, s.handleRenewProxyCert))
+	s.mux.HandleFunc("POST /api/settings/tls/renew-all", RequireAdminAuth(s.store, s.handleRenewAllCerts))
+	s.mux.HandleFunc("GET /api/settings/tls/certs", RequireAdminAuth(s.store, s.handleGetTLSCerts))
 }
 
 // Setup handlers
@@ -273,10 +281,11 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 // Proxies handlers
 type ProxyTargetWithHealth struct {
 	*store.ProxyTarget
-	IsHealthy   bool      `json:"is_healthy"`
-	LatencyMs   int64     `json:"latency_ms"`
-	LastChecked time.Time `json:"last_checked"`
-	LastError   string    `json:"last_error,omitempty"`
+	IsHealthy   bool                        `json:"is_healthy"`
+	LatencyMs   int64                       `json:"latency_ms"`
+	LastChecked time.Time                   `json:"last_checked"`
+	LastError   string                      `json:"last_error,omitempty"`
+	TLSCert     *tlsmanager.CertificateInfo `json:"tls_cert,omitempty"`
 }
 
 func (s *Server) handleGetProxies(w http.ResponseWriter, r *http.Request) {
@@ -287,6 +296,9 @@ func (s *Server) handleGetProxies(w http.ResponseWriter, r *http.Request) {
 	for i, t := range targets {
 		item := ProxyTargetWithHealth{
 			ProxyTarget: t,
+		}
+		if s.tlsManager != nil {
+			item.TLSCert = s.tlsManager.GetCertificateInfo(t.Domain)
 		}
 		if h, ok := healthMap[t.ID]; ok {
 			item.IsHealthy = h.IsHealthy
@@ -343,7 +355,21 @@ func (s *Server) handleGetProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, target)
+	healthMap := s.proxyEngine.GetHealthChecker().GetHealth()
+	item := ProxyTargetWithHealth{
+		ProxyTarget: target,
+	}
+	if s.tlsManager != nil {
+		item.TLSCert = s.tlsManager.GetCertificateInfo(target.Domain)
+	}
+	if h, ok := healthMap[target.ID]; ok {
+		item.IsHealthy = h.IsHealthy
+		item.LatencyMs = h.LatencyMs
+		item.LastChecked = h.LastChecked
+		item.LastError = h.LastError
+	}
+
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (s *Server) handleUpdateProxy(w http.ResponseWriter, r *http.Request) {
@@ -817,6 +843,67 @@ func (s *Server) handleImportLegacy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":        true,
 		"imported_count": count,
+	})
+}
+
+// TLS Certificate Management Handlers
+func (s *Server) handleRenewProxyCert(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	target, err := s.store.GetTargetByID(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "Proxy route not found"})
+		return
+	}
+
+	if s.tlsManager == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "TLS Certificate Manager is not available"})
+		return
+	}
+
+	certInfo, renewErr := s.tlsManager.RenewCertificate(r.Context(), target.Domain)
+	if renewErr != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"error":   renewErr.Error(),
+			"cert":    certInfo,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"cert":    certInfo,
+	})
+}
+
+func (s *Server) handleRenewAllCerts(w http.ResponseWriter, r *http.Request) {
+	if s.tlsManager == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "TLS Certificate Manager is not available"})
+		return
+	}
+
+	certs, err := s.tlsManager.RenewAllCertificates(r.Context())
+	var errMsg string
+	if err != nil {
+		errMsg = err.Error()
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": err == nil,
+		"error":   errMsg,
+		"certs":   certs,
+	})
+}
+
+func (s *Server) handleGetTLSCerts(w http.ResponseWriter, r *http.Request) {
+	if s.tlsManager == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"certs": []any{}})
+		return
+	}
+
+	certs := s.tlsManager.GetAllCertificatesInfo()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"certs": certs,
 	})
 }
 

@@ -57,7 +57,7 @@ func main() {
 	ddnsMgr.Start(ctx)
 
 	// 5. Initialize Web UI & API Server
-	apiServer := api.NewServer(cfg, st, proxyEngine, ddnsMgr)
+	apiServer := api.NewServer(cfg, st, proxyEngine, ddnsMgr, tlsMgr)
 
 	// Setup Web static files handler
 	staticHandler := setupWebHandler()

@@ -7,6 +7,7 @@ import type {
   SystemLog,
   SystemSettings,
   CFZone,
+  CertificateInfo,
 } from '../types'
 
 const API_BASE = '/api'
@@ -152,6 +153,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ scheme, host }),
     })
+  },
+
+  async renewCertificate(id: string): Promise<{ success: boolean; cert: CertificateInfo; error?: string }> {
+    return request<{ success: boolean; cert: CertificateInfo; error?: string }>(`/proxies/${id}/renew-cert`, {
+      method: 'POST',
+    })
+  },
+
+  async renewAllCertificates(): Promise<{ success: boolean; certs: CertificateInfo[]; error?: string }> {
+    return request<{ success: boolean; certs: CertificateInfo[]; error?: string }>('/settings/tls/renew-all', {
+      method: 'POST',
+    })
+  },
+
+  async getTLSCerts(): Promise<{ certs: CertificateInfo[] }> {
+    return request<{ certs: CertificateInfo[] }>('/settings/tls/certs')
   },
 
   // Cloudflare DDNS

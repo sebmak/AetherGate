@@ -3,6 +3,7 @@ import {
   X,
   Server,
   Shield,
+  ShieldCheck,
   Lock,
   Cloud,
   CheckCircle2,
@@ -10,8 +11,11 @@ import {
   Plus,
   Trash2,
   Zap,
+  RefreshCw,
+  AlertTriangle,
+  AlertCircle,
 } from 'lucide-react'
-import type { ProxyTarget } from '../types'
+import type { ProxyTarget, CertificateInfo } from '../types'
 import { api } from '../services/api'
 
 interface ProxyModalProps {
@@ -38,6 +42,10 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
   const [cloudflareSync, setCloudflareSync] = useState(true)
   const [enabled, setEnabled] = useState(true)
 
+  const [tlsCert, setTlsCert] = useState<CertificateInfo | undefined>(undefined)
+  const [isRenewingCert, setIsRenewingCert] = useState(false)
+  const [certMsg, setCertMsg] = useState<{ success: boolean; message: string } | null>(null)
+
   const [customHeaders, setCustomHeaders] = useState<{ key: string; value: string }[]>([])
   const [newHeaderKey, setNewHeaderKey] = useState('')
   const [newHeaderVal, setNewHeaderVal] = useState('')
@@ -59,6 +67,7 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
       setPassHostHeader(initialData.pass_host_header ?? true)
       setCloudflareSync(initialData.cloudflare_sync ?? true)
       setEnabled(initialData.enabled ?? true)
+      setTlsCert(initialData.tls_cert)
 
       if (initialData.custom_headers) {
         setCustomHeaders(
@@ -80,10 +89,33 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
       setCloudflareSync(true)
       setEnabled(true)
       setCustomHeaders([])
+      setTlsCert(undefined)
     }
     setTestResult(null)
+    setCertMsg(null)
     setError('')
   }, [initialData, isOpen])
+
+  const handleRenewCert = async () => {
+    if (!initialData?.id) return
+    setIsRenewingCert(true)
+    setCertMsg(null)
+    try {
+      const res = await api.renewCertificate(initialData.id)
+      if (res.cert) {
+        setTlsCert(res.cert)
+      }
+      if (res.success) {
+        setCertMsg({ success: true, message: `Certificate renewed successfully (${res.cert?.days_remaining ?? 0} days remaining).` })
+      } else {
+        setCertMsg({ success: false, message: res.error || 'Failed to renew certificate.' })
+      }
+    } catch (err: any) {
+      setCertMsg({ success: false, message: err.message || 'Renewal request failed.' })
+    } finally {
+      setIsRenewingCert(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -240,6 +272,104 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
             />
             <div className="form-helper">Requests with this Host header will route to the upstream target.</div>
           </div>
+
+          {/* TLS Certificate Status & Regeneration (for existing routes) */}
+          {initialData && (
+            <div style={{
+              background: '#0d1320',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem 1rem',
+              marginBottom: '1.25rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Shield size={16} color="var(--accent-cyan)" />
+                  <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#fff' }}>SSL / TLS Certificate</span>
+                  {tlsCert && (
+                    <>
+                      {tlsCert.status === 'valid' && (
+                        <span className="badge badge-emerald"><ShieldCheck size={11} /> Valid • {tlsCert.days_remaining}d left</span>
+                      )}
+                      {tlsCert.status === 'expiring_soon' && (
+                        <span className="badge badge-amber"><AlertTriangle size={11} /> Expiring • {tlsCert.days_remaining}d left</span>
+                      )}
+                      {tlsCert.status === 'expired' && (
+                        <span className="badge badge-rose"><AlertCircle size={11} /> Expired</span>
+                      )}
+                      {tlsCert.status === 'self_signed' && (
+                        <span className="badge badge-cyan"><Shield size={11} /> Dev Self-Signed</span>
+                      )}
+                      {tlsCert.status === 'error' && (
+                        <span className="badge badge-rose"><AlertCircle size={11} /> Cert Error</span>
+                      )}
+                      {tlsCert.status === 'renewing' && (
+                        <span className="badge badge-cyan"><RefreshCw size={11} className="spin" /> Renewing...</span>
+                      )}
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRenewCert}
+                  disabled={isRenewingCert}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                  title="Force Let's Encrypt renewal for this domain"
+                >
+                  <RefreshCw size={12} className={isRenewingCert ? 'spin' : ''} />
+                  {isRenewingCert ? 'Regenerating...' : 'Regenerate Certificate'}
+                </button>
+              </div>
+
+              {certMsg && (
+                <div style={{
+                  background: certMsg.success ? '#0f291e' : '#2e141a',
+                  border: `1px solid ${certMsg.success ? '#165b3d' : '#7f1d1d'}`,
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  color: certMsg.success ? '#34d399' : '#f87171',
+                  fontSize: '0.8rem',
+                  marginBottom: '0.65rem',
+                }}>
+                  {certMsg.message}
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.65rem', fontSize: '0.8rem' }}>
+                <div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Issuer</div>
+                  <div style={{ color: '#fff', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {tlsCert?.issuer || 'Let\'s Encrypt (Pending)'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Days Left</div>
+                  <div style={{ color: tlsCert?.days_remaining && tlsCert.days_remaining > 15 ? '#34d399' : '#fbbf24', fontWeight: 600 }}>
+                    {tlsCert ? `${tlsCert.days_remaining} days` : 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Issued / Renewed</div>
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    {tlsCert?.issued_at ? new Date(tlsCert.issued_at).toLocaleDateString() : 'Not issued yet'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Expires</div>
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    {tlsCert?.expires_at ? new Date(tlsCert.expires_at).toLocaleDateString() : 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              {tlsCert?.last_error && (
+                <div style={{ marginTop: '0.65rem', background: '#2e141a', border: '1px solid #7f1d1d', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', color: '#f87171', fontSize: '0.75rem' }}>
+                  <strong>Last Renewal Error:</strong> {tlsCert.last_error}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Target Host & Scheme */}
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
