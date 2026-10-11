@@ -487,9 +487,9 @@ func (s *Server) handleDDNSTestToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	current := s.store.GetCloudflareConfig()
-	token := req.ApiToken
+	token := strings.TrimSpace(req.ApiToken)
 	if token == "" || strings.HasPrefix(token, "***") {
-		token = current.ApiToken
+		token = strings.TrimSpace(current.ApiToken)
 	}
 
 	if token == "" {
@@ -497,29 +497,43 @@ func (s *Server) handleDDNSTestToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	valid, err := s.ddnsManager.VerifyToken(r.Context(), token)
-	if err != nil || !valid {
+	testCfg := store.CloudflareConfig{ApiToken: token}
+
+	// 1. Verify token status via /user/tokens/verify
+	valid, verifyErr := s.ddnsManager.VerifyToken(r.Context(), token)
+
+	// 2. Also check if we can query zones
+	zones, zoneErr := s.ddnsManager.ListZones(r.Context(), testCfg)
+
+	if !valid && zoneErr != nil {
+		// Both verification methods failed: return detailed descriptive error
+		errMsg := "Token verification failed"
+		if verifyErr != nil {
+			errMsg = fmt.Sprintf("Token verification failed: %s", verifyErr.Error())
+		} else if zoneErr != nil {
+			errMsg = fmt.Sprintf("Token verification failed: %s", zoneErr.Error())
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"valid": false,
-			"error": fmt.Sprintf("Token verification failed: %v", err),
+			"error": errMsg,
 		})
 		return
 	}
 
-	testCfg := store.CloudflareConfig{ApiToken: token}
-	zones, err := s.ddnsManager.ListZones(r.Context(), testCfg)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"valid": true,
-			"zones": []any{},
-			"error": fmt.Sprintf("Token is valid, but failed to list zones: %v", err),
-		})
-		return
+	zoneList := zones
+	if zoneList == nil {
+		zoneList = []ddns.CFZone{}
+	}
+
+	var warningMsg string
+	if zoneErr != nil {
+		warningMsg = fmt.Sprintf("Token verified, but could not list zones: %v", zoneErr)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"valid": true,
-		"zones": zones,
+		"valid":   true,
+		"zones":   zoneList,
+		"warning": warningMsg,
 	})
 }
 

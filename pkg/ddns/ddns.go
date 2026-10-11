@@ -416,7 +416,7 @@ type cfError struct {
 	Message string `json:"message"`
 }
 
-type cfZone struct {
+type CFZone struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
@@ -431,6 +431,11 @@ type cfDNSRecord struct {
 }
 
 func (m *Manager) cfRequest(ctx context.Context, cfg store.CloudflareConfig, method, path string, body any) (*cfResponse, error) {
+	cfg.ApiToken = strings.TrimSpace(cfg.ApiToken)
+	cfg.ApiKey = strings.TrimSpace(cfg.ApiKey)
+	cfg.Email = strings.TrimSpace(cfg.Email)
+	cfg.ZoneID = strings.TrimSpace(cfg.ZoneID)
+
 	var bodyReader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -486,6 +491,11 @@ func (m *Manager) cfRequest(ctx context.Context, cfg store.CloudflareConfig, met
 
 // VerifyToken validates the Cloudflare API token
 func (m *Manager) VerifyToken(ctx context.Context, token string) (bool, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false, errors.New("empty token provided")
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.cloudflare.com/client/v4/user/tokens/verify", nil)
 	if err != nil {
 		return false, err
@@ -494,26 +504,42 @@ func (m *Manager) VerifyToken(ctx context.Context, token string) (bool, error) {
 
 	resp, err := m.client.Do(req)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("connection to Cloudflare failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var cfResp cfResponse
-	if err := json.NewDecoder(resp.Body).Decode(&cfResp); err != nil {
-		return false, err
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response from Cloudflare: %w", err)
 	}
 
-	return cfResp.Success, nil
+	var cfResp cfResponse
+	if err := json.Unmarshal(respBytes, &cfResp); err != nil {
+		return false, fmt.Errorf("invalid response from Cloudflare (status %d): %w", resp.StatusCode, err)
+	}
+
+	if !cfResp.Success {
+		var errMsgs []string
+		for _, e := range cfResp.Errors {
+			errMsgs = append(errMsgs, fmt.Sprintf("[%d] %s", e.Code, e.Message))
+		}
+		if len(errMsgs) > 0 {
+			return false, fmt.Errorf("Cloudflare API error: %s", strings.Join(errMsgs, ", "))
+		}
+		return false, fmt.Errorf("Cloudflare rejected token with HTTP status %d", resp.StatusCode)
+	}
+
+	return true, nil
 }
 
 // ListZones returns active zones for the account
-func (m *Manager) ListZones(ctx context.Context, cfg store.CloudflareConfig) ([]cfZone, error) {
+func (m *Manager) ListZones(ctx context.Context, cfg store.CloudflareConfig) ([]CFZone, error) {
 	resp, err := m.cfRequest(ctx, cfg, "GET", "/zones?status=active&per_page=50", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var zones []cfZone
+	var zones []CFZone
 	if err := json.Unmarshal(resp.Result, &zones); err != nil {
 		return nil, err
 	}

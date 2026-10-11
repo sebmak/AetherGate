@@ -67,15 +67,24 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
   }, [config])
 
   const handleTestToken = async () => {
+    const tokenToTest = apiToken.trim()
+    if (!tokenToTest) {
+      setTokenVerifyMessage({
+        success: false,
+        message: 'Please enter a Cloudflare API token first',
+      })
+      return
+    }
+
     setIsTestingToken(true)
     setTokenVerifyMessage(null)
     setError('')
     try {
-      const res = await api.testCloudflareToken(apiToken)
+      const res = await api.testCloudflareToken(tokenToTest)
       if (res.valid) {
         setTokenVerifyMessage({
           success: true,
-          message: 'Cloudflare API Token verified successfully!',
+          message: res.warning ? `Token verified! (${res.warning})` : 'Cloudflare API Token verified successfully!',
         })
         if (res.zones && res.zones.length > 0) {
           setAvailableZones(res.zones)
@@ -114,11 +123,11 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
     try {
       await api.updateDDNSConfig({
         enabled,
-        api_token: authMethod === 'token' ? apiToken : '',
-        api_key: authMethod === 'key' ? apiKey : '',
-        email: authMethod === 'key' ? email : '',
-        zone_id: zoneId,
-        zone_name: zoneName,
+        api_token: authMethod === 'token' ? apiToken.trim() : '',
+        api_key: authMethod === 'key' ? apiKey.trim() : '',
+        email: authMethod === 'key' ? email.trim() : '',
+        zone_id: zoneId.trim(),
+        zone_name: zoneName.trim(),
         proxied,
         ttl: 1, // Auto
         interval_seconds: intervalSec,
@@ -320,16 +329,33 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
                     {isTestingToken ? 'Verifying...' : 'Verify Token'}
                   </button>
                 </div>
-                <div className="form-helper">
-                  Requires <strong>Zone:DNS:Edit</strong> and <strong>Zone:Zone:Read</strong> permissions on Cloudflare.
+                <div className="form-helper" style={{ marginTop: '0.4rem', lineHeight: '1.4' }}>
+                  <span>
+                    💡 <strong>Account ID is not required.</strong> Only the API Token is needed. Use Cloudflare's built-in <strong>"Edit zone DNS"</strong> template with <code>Zone:DNS:Edit</code> and <code>Zone:Zone:Read</code> permissions for your target zones.
+                  </span>
                 </div>
                 {tokenVerifyMessage && (
                   <div style={{
-                    marginTop: '0.5rem',
+                    marginTop: '0.75rem',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: tokenVerifyMessage.success ? '#0f291e' : '#2e141a',
+                    border: `1px solid ${tokenVerifyMessage.success ? '#165b3d' : '#7f1d1d'}`,
+                    color: tokenVerifyMessage.success ? '#34d399' : '#f87171',
                     fontSize: '0.8125rem',
-                    color: tokenVerifyMessage.success ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem',
                   }}>
-                    {tokenVerifyMessage.message}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+                      {tokenVerifyMessage.success ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      <span>{tokenVerifyMessage.message}</span>
+                    </div>
+                    {!tokenVerifyMessage.success && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        Ensure you created an <strong>API Token</strong> (not an Account ID or Global API Key) at <em>dash.cloudflare.com/profile/api-tokens</em>, and that Zone Resources includes your domain.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

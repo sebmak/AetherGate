@@ -171,7 +171,7 @@ export const api = {
     })
   },
 
-  async testCloudflareToken(api_token: string): Promise<{ valid: boolean; zones?: CFZone[]; error?: string }> {
+  async testCloudflareToken(api_token: string): Promise<{ valid: boolean; zones?: CFZone[]; error?: string; warning?: string }> {
     return request('/ddns/test-token', {
       method: 'POST',
       body: JSON.stringify({ api_token }),
