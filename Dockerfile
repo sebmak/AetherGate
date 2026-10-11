@@ -31,8 +31,9 @@ RUN go mod download && go mod verify
 COPY . .
 COPY --from=web-builder /app/web/dist ./web/dist
 
-# Build statically linked binary
-RUN go build -ldflags="-s -w" -o /app/bin/proxyserver ./cmd/proxyserver
+# Build statically linked binary with version injection
+ARG VERSION=2.0.0
+RUN go build -ldflags="-s -w -X 'github.com/sebmak/proxyserver/pkg/config.Version=${VERSION}'" -o /app/bin/proxyserver ./cmd/proxyserver
 
 # -------------------------------------------------------------
 # Stage 3: Minimal Production Image (Alpine)

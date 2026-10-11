@@ -241,7 +241,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":    "healthy",
 		"uptime_s":  int64(time.Since(s.startTime).Seconds()),
 		"timestamp": time.Now(),
-		"version":   "2.0.0",
+		"version":   config.Version,
 	})
 }
 
