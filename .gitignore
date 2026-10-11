@@ -1,0 +1,40 @@
+bin/
+dist/
+/proxyserver
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test and coverage
+*.test
+*.out
+
+# Node dependencies and build
+node_modules/
+web/dist/
+web/node_modules/
+.npm
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data directory runtime files
+data/certs/
+data/config.json
+data/*.log
+data/*.tmp

@@ -1,0 +1,16 @@
+{
+    "targets": {
+        "movies.home.makinson.me": {
+            "host": "192.168.1.104:9990",
+            "scheme": "http",
+            "force_ssl": true
+        },
+        "local.home.makinson.me": {
+            "host": "127.0.0.1:8081",
+            "scheme": "http",
+            "force_ssl": false,
+            "require_auth": true,
+            "auth_resource": "server.local"
+        }
+    }
+}

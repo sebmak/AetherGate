@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  proxyserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: proxyserver:latest
+    container_name: proxyserver
+    restart: unless-stopped
+    ports:
+      # Management Web UI & API
+      - "8080:8080"
+      # HTTP Reverse Proxy & Let's Encrypt ACME challenges
+      - "9080:9080"
+      # HTTPS Reverse Proxy (TLS)
+      - "9443:9443"
+    environment:
+      - DATA_DIR=/data
+      - CONFIG_PATH=/data/config.json
+      - CERT_DIR=/data/certs
+      - ADMIN_PORT=8080
+      - HTTP_PORT=9080
+      - HTTPS_PORT=9443
+    volumes:
+      # Persistent configuration, SQLite/JSON state, and TLS certificates
+      - ./data:/data
+      # Optional: Mount legacy servers.json for initial auto-import
+      - ./proxy_server_old/servers.json:/data/legacy_servers.json:ro
