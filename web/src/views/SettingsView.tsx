@@ -59,13 +59,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
     setIsSavingTLS(true)
     setTlsError('')
     setTlsSuccess(false)
+
+    const trimmedEmail = tlsEmail.trim()
+    if (trimmedEmail && /@(example\.(com|org|net)|test\.(com|org)|localhost|invalid)/i.test(trimmedEmail)) {
+      setTlsError('Please enter a real email or leave blank. Domains like example.com are rejected by Let\'s Encrypt.')
+      setIsSavingTLS(false)
+      return
+    }
+
     try {
       await api.updateSettings({
         tls: {
           mode: tlsMode,
-          email: tlsEmail,
-          cert_path: certPath,
-          key_path: keyPath,
+          email: trimmedEmail,
+          cert_path: certPath.trim(),
+          key_path: keyPath.trim(),
         },
       })
       setTlsSuccess(true)
@@ -222,9 +230,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
                     className="input"
                     value={tlsEmail}
                     onChange={(e) => setTlsEmail(e.target.value)}
-                    placeholder="admin@makinson.me"
+                    placeholder="yourname@gmail.com (or leave blank)"
                   />
-                  <div className="form-helper">Used for Let's Encrypt certificate renewal notices and TOS acceptance.</div>
+                  <div className="form-helper">
+                    Optional. Used for Let's Encrypt certificate renewal notices. If left blank, certificates are issued anonymously. Do not use placeholder domains like <em>example.com</em>.
+                  </div>
                 </div>
               )}
 

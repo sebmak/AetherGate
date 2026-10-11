@@ -82,6 +82,24 @@ type Store struct {
 	changeHooks []func()
 }
 
+// IsForbiddenEmail checks if an email belongs to RFC 2606 or placeholder domains banned by ACME/Let's Encrypt
+func IsForbiddenEmail(email string) bool {
+	if email == "" {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(email))
+	forbiddenDomains := []string{
+		"@example.com", "@example.org", "@example.net",
+		"@test.com", "@test.org", "@localhost", "@invalid",
+	}
+	for _, fd := range forbiddenDomains {
+		if strings.HasSuffix(lower, fd) {
+			return true
+		}
+	}
+	return false
+}
+
 // NewStore creates a new Store instance and loads existing data
 func NewStore(configPath string) (*Store, error) {
 	s := &Store{
@@ -95,7 +113,7 @@ func NewStore(configPath string) (*Store, error) {
 			},
 			TLS: TLSConfig{
 				Mode:  "autocert",
-				Email: "admin@example.com",
+				Email: "",
 			},
 			Cloudflare: CloudflareConfig{
 				Enabled:         false,
@@ -165,6 +183,9 @@ func (s *Store) load() error {
 		}
 		if cfg.Cloudflare.TTL == 0 {
 			cfg.Cloudflare.TTL = 1
+		}
+		if IsForbiddenEmail(cfg.TLS.Email) {
+			cfg.TLS.Email = ""
 		}
 
 		s.data = &cfg
@@ -470,13 +491,22 @@ func (s *Store) SaveSecurityConfig(cfg SecurityConfig) error {
 func (s *Store) GetTLSConfig() TLSConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.data.TLS
+	cfg := s.data.TLS
+	if IsForbiddenEmail(cfg.Email) {
+		cfg.Email = ""
+	}
+	return cfg
 }
 
 // SaveTLSConfig updates TLS configuration
 func (s *Store) SaveTLSConfig(cfg TLSConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	cfg.Email = strings.TrimSpace(cfg.Email)
+	if IsForbiddenEmail(cfg.Email) {
+		cfg.Email = ""
+	}
 
 	s.data.TLS = cfg
 	if err := s.saveLocked(); err != nil {

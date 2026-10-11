@@ -51,9 +51,9 @@ func NewManager(s *store.Store, certDir string) (*Manager, error) {
 	}
 
 	tlsCfg := s.GetTLSConfig()
-	email := tlsCfg.Email
-	if email == "" {
-		email = "admin@example.com"
+	email := strings.TrimSpace(tlsCfg.Email)
+	if store.IsForbiddenEmail(email) {
+		email = ""
 	}
 
 	m.autocertMgr = &autocert.Manager{
@@ -91,11 +91,25 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 	// 2. If autocert mode is active and we have an SNI server name, request via Let's Encrypt
 	if tlsCfg.Mode == "autocert" || tlsCfg.Mode == "" {
 		if hello.ServerName != "" {
-			cert, err := m.autocertMgr.GetCertificate(hello)
-			if err == nil {
-				return cert, nil
+			cleanHost := strings.ToLower(strings.TrimSpace(hello.ServerName))
+			// Only invoke ACME autocert for registered proxy domains
+			if _, found := m.store.GetTargetByDomain(cleanHost); found {
+				m.mu.Lock()
+				currentEmail := strings.TrimSpace(tlsCfg.Email)
+				if store.IsForbiddenEmail(currentEmail) {
+					currentEmail = ""
+				}
+				m.autocertMgr.Email = currentEmail
+				m.mu.Unlock()
+
+				cert, err := m.autocertMgr.GetCertificate(hello)
+				if err == nil {
+					return cert, nil
+				}
+				logger.Warn("Autocert certificate request for %s failed: %v (falling back to dev cert)", hello.ServerName, err)
+			} else {
+				logger.Debug("Incoming SNI %s is not a registered proxy target, serving self-signed cert", hello.ServerName)
 			}
-			logger.Debug("Autocert certificate lookup for %s returned: %v (falling back to dev cert)", hello.ServerName, err)
 		}
 	}
 
