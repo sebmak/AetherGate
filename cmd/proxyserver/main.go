@@ -29,7 +29,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	// 1. Initialize persistent store
-	st, err := store.NewStore(cfg.ConfigPath, cfg.LegacyConfig)
+	st, err := store.NewStore(cfg.ConfigPath)
 	if err != nil {
 		logger.Error("Failed to initialize store: %v", err)
 		os.Exit(1)

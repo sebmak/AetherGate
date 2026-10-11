@@ -25,7 +25,5 @@ services:
       - HTTP_PORT=9080
       - HTTPS_PORT=9443
     volumes:
-      # Persistent configuration, SQLite/JSON state, and TLS certificates
+      # Persistent configuration, state, and TLS certificates
       - ./data:/data
-      # Optional: Mount legacy servers.json for initial auto-import
-      - ./proxy_server_old/servers.json:/data/legacy_servers.json:ro

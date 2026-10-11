@@ -14,7 +14,6 @@ func TestStoreImportLegacyAndCRUD(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	configPath := filepath.Join(tempDir, "config.json")
-	legacyPath := filepath.Join(tempDir, "servers.json")
 
 	// Create mock legacy servers.json
 	mockLegacy := `{
@@ -33,14 +32,23 @@ func TestStoreImportLegacyAndCRUD(t *testing.T) {
 			}
 		}
 	}`
-	if err := os.WriteFile(legacyPath, []byte(mockLegacy), 0644); err != nil {
-		t.Fatalf("Failed to write mock legacy file: %v", err)
-	}
-
-	// Initialize Store with legacy import
-	s, err := NewStore(configPath, legacyPath)
+	// Initialize Store without auto-importing any files
+	s, err := NewStore(configPath)
 	if err != nil {
 		t.Fatalf("NewStore failed: %v", err)
+	}
+
+	if len(s.GetTargets()) != 0 {
+		t.Fatalf("Expected 0 targets initially, got %d", len(s.GetTargets()))
+	}
+
+	// Import legacy servers.json payload explicitly
+	imported, err := s.ImportLegacyPayload([]byte(mockLegacy))
+	if err != nil {
+		t.Fatalf("ImportLegacyPayload failed: %v", err)
+	}
+	if imported != 2 {
+		t.Fatalf("Expected 2 imported targets, got %d", imported)
 	}
 
 	targets := s.GetTargets()

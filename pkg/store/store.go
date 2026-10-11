@@ -76,18 +76,16 @@ type Config struct {
 
 // Store handles thread-safe configuration management and persistence
 type Store struct {
-	mu           sync.RWMutex
-	configPath   string
-	legacyPath   string
-	data         *Config
-	changeHooks  []func()
+	mu          sync.RWMutex
+	configPath  string
+	data        *Config
+	changeHooks []func()
 }
 
-// NewStore creates a new Store instance and loads existing data or imports defaults
-func NewStore(configPath, legacyPath string) (*Store, error) {
+// NewStore creates a new Store instance and loads existing data
+func NewStore(configPath string) (*Store, error) {
 	s := &Store{
 		configPath: configPath,
-		legacyPath: legacyPath,
 		data: &Config{
 			Version: 1,
 			Security: SecurityConfig{
@@ -174,18 +172,8 @@ func (s *Store) load() error {
 		return nil
 	}
 
-	// If config.json doesn't exist, check for legacy servers.json to import
+	// If config.json doesn't exist, initialize clean default config
 	logger.Info("No existing config found at %s. Initializing fresh configuration...", s.configPath)
-	if s.legacyPath != "" {
-		if _, err := os.Stat(s.legacyPath); err == nil {
-			logger.Info("Discovered legacy configuration at %s. Auto-importing...", s.legacyPath)
-			if err := s.importLegacyLocked(s.legacyPath); err != nil {
-				logger.Warn("Failed to auto-import legacy config: %v", err)
-			}
-		}
-	}
-
-	// Save initial config file
 	return s.saveLocked()
 }
 
@@ -238,15 +226,10 @@ type LegacyServers struct {
 	} `json:"targets"`
 }
 
-func (s *Store) importLegacyLocked(path string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
+func (s *Store) ImportLegacyPayloadLocked(content []byte) (int, error) {
 	var legacy LegacyServers
 	if err := json.Unmarshal(content, &legacy); err != nil {
-		return err
+		return 0, fmt.Errorf("invalid legacy servers.json format: %w", err)
 	}
 
 	count := 0
@@ -261,34 +244,52 @@ func (s *Store) importLegacyLocked(path string) error {
 			scheme = "http"
 		}
 
-		id := generateID()
-		name := domainClean
+		// Check if domain is already in targets, update if so
+		var target *ProxyTarget
+		for _, existing := range s.data.Targets {
+			if strings.ToLower(existing.Domain) == domainClean {
+				target = existing
+				break
+			}
+		}
+
 		parts := strings.Split(domainClean, ".")
+		name := domainClean
 		if len(parts) > 0 && parts[0] != "" {
 			name = strings.Title(parts[0]) + " Proxy"
 		}
 
-		target := &ProxyTarget{
-			ID:             id,
-			Name:           name,
-			Domain:         domainClean,
-			Host:           t.Host,
-			Scheme:         scheme,
-			ForceSSL:       t.ForceSSL,
-			RequireAuth:    t.RequireAuth,
-			AuthResource:   t.AuthResource,
-			PassHostHeader: true,
-			Enabled:        true,
-			CloudflareSync: true,
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
+		if target != nil {
+			target.Host = t.Host
+			target.Scheme = scheme
+			target.ForceSSL = t.ForceSSL
+			target.RequireAuth = t.RequireAuth
+			target.AuthResource = t.AuthResource
+			target.UpdatedAt = time.Now()
+		} else {
+			id := generateID()
+			target = &ProxyTarget{
+				ID:             id,
+				Name:           name,
+				Domain:         domainClean,
+				Host:           t.Host,
+				Scheme:         scheme,
+				ForceSSL:       t.ForceSSL,
+				RequireAuth:    t.RequireAuth,
+				AuthResource:   t.AuthResource,
+				PassHostHeader: true,
+				Enabled:        true,
+				CloudflareSync: true,
+				CreatedAt:      time.Now(),
+				UpdatedAt:      time.Now(),
+			}
+			s.data.Targets[id] = target
 		}
-		s.data.Targets[id] = target
 		count++
 	}
 
-	logger.Info("Successfully imported %d targets from legacy configuration %s", count, path)
-	return nil
+	logger.Info("Successfully imported %d targets from legacy JSON payload", count)
+	return count, nil
 }
 
 // GetTargets returns all proxy targets
@@ -486,13 +487,13 @@ func (s *Store) SaveTLSConfig(cfg TLSConfig) error {
 	return nil
 }
 
-// ImportLegacy imports targets from legacy servers.json
-func (s *Store) ImportLegacy(path string) (int, error) {
+// ImportLegacyPayload imports targets from a legacy JSON payload string or bytes
+func (s *Store) ImportLegacyPayload(content []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	before := len(s.data.Targets)
-	if err := s.importLegacyLocked(path); err != nil {
+	if _, err := s.ImportLegacyPayloadLocked(content); err != nil {
 		return 0, err
 	}
 	after := len(s.data.Targets)

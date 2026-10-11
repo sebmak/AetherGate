@@ -131,14 +131,12 @@ Navigate to **http://localhost:8080** to complete the first-time administrator s
 
 ---
 
-## 🔄 Legacy Migration (`proxy_server_old/servers.json`)
+## 🔄 Legacy Migration (`servers.json`)
 
-If you have an existing `proxy_server_old/servers.json`, ProxyServer automatically detects and imports all your configured targets on its initial launch:
+If you have an existing configuration from a legacy proxy server, you can import it seamlessly without restarting:
 
-- `movies.home.makinson.me` -> `http://192.168.1.104:9990` (`ForceSSL: true`)
-- `local.home.makinson.me` -> `http://127.0.0.1:8081` (`RequireAuth: true`)
-
-You can also re-trigger migration anytime from **Settings & Security -> Re-import targets from proxy_server_old/servers.json**.
+1. **During Initial Setup**: When visiting the Web UI (`http://localhost:8080`) for the first time, click **"Import Existing servers.json (Optional)"** and paste your JSON payload. All your proxy routes will be configured instantly alongside your new admin credentials.
+2. **From Settings Anytime**: In **Settings -> Configuration & Legacy Import**, click **"Paste & Import Legacy servers.json"** to import routes into your live configuration.
 
 ---
 
@@ -152,7 +150,6 @@ You can also re-trigger migration anytime from **Settings & Security -> Re-impor
 | `DATA_DIR` | `./data` | Directory for persistent storage (`config.json`, certs) |
 | `CONFIG_PATH` | `/data/config.json` | Path to persistent configuration file |
 | `CERT_DIR` | `/data/certs` | Directory for ACME certificate cache |
-| `LEGACY_CONFIG_PATH` | `./proxy_server_old/servers.json` | Path to legacy configuration for initial import |
 
 ---
 

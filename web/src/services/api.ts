@@ -68,10 +68,14 @@ export const api = {
     return request<{ is_configured: boolean }>('/setup/status')
   },
 
-  async performSetup(username: string, password: string): Promise<{ success: boolean; token: string; username: string }> {
-    const res = await request<{ success: boolean; token: string; username: string }>('/setup', {
+  async performSetup(username: string, password: string, legacyConfig?: string): Promise<{ success: boolean; token: string; username: string; imported_count?: number }> {
+    const res = await request<{ success: boolean; token: string; username: string; imported_count?: number }>('/setup', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({
+        username,
+        password,
+        legacy_config: legacyConfig ? legacyConfig.trim() : undefined,
+      }),
     })
     if (res.token) {
       localStorage.setItem('proxyserver_token', res.token)
@@ -198,9 +202,10 @@ export const api = {
     })
   },
 
-  async importLegacy(): Promise<{ success: boolean; imported_count: number }> {
+  async importLegacy(payload: string): Promise<{ success: boolean; imported_count: number }> {
     return request('/settings/import-legacy', {
       method: 'POST',
+      body: JSON.stringify({ payload }),
     })
   },
 }

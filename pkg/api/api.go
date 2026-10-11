@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,8 +118,9 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username     string `json:"username"`
+		Password     string `json:"password"`
+		LegacyConfig string `json:"legacy_config,omitempty"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Invalid request body"})
@@ -146,6 +148,18 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If user provided a legacy configuration JSON during setup, import it
+	importedCount := 0
+	if trimmedLegacy := strings.TrimSpace(req.LegacyConfig); trimmedLegacy != "" {
+		count, importErr := s.store.ImportLegacyPayload([]byte(trimmedLegacy))
+		if importErr != nil {
+			logger.Warn("Failed to import pasted legacy config during setup: %v", importErr)
+		} else {
+			importedCount = count
+			logger.Info("Imported %d targets from pasted legacy config during setup", count)
+		}
+	}
+
 	token, err := auth.GenerateAdminToken(sec.AdminUsername, sec.JwtSecret, sec.SessionDurationHours)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "Failed to generate token"})
@@ -156,9 +170,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	logger.Info("Admin account initialized successfully for user '%s'", sec.AdminUsername)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":  true,
-		"token":    token,
-		"username": sec.AdminUsername,
+		"success":        true,
+		"token":          token,
+		"username":       sec.AdminUsername,
+		"imported_count": importedCount,
 	})
 }
 
@@ -643,7 +658,23 @@ func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleImportLegacy(w http.ResponseWriter, r *http.Request) {
-	count, err := s.store.ImportLegacy(s.cfg.LegacyConfig)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Failed to read request body"})
+		return
+	}
+
+	var wrapper struct {
+		Payload string `json:"payload"`
+	}
+	var payloadBytes []byte
+	if err := json.Unmarshal(body, &wrapper); err == nil && wrapper.Payload != "" {
+		payloadBytes = []byte(wrapper.Payload)
+	} else {
+		payloadBytes = body
+	}
+
+	count, err := s.store.ImportLegacyPayload(payloadBytes)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return

@@ -8,13 +8,12 @@ import (
 
 // AppConfig holds global application configuration
 type AppConfig struct {
-	AdminPort    int
-	HTTPPort     int
-	HTTPSPort    int
-	DataDir      string
-	CertDir      string
-	ConfigPath   string
-	LegacyConfig string
+	AdminPort  int
+	HTTPPort   int
+	HTTPSPort  int
+	DataDir    string
+	CertDir    string
+	ConfigPath string
 }
 
 // LoadConfig loads configuration from environment variables with sensible defaults
@@ -29,20 +28,18 @@ func LoadConfig() *AppConfig {
 
 	certDir := getEnv("CERT_DIR", filepath.Join(dataDir, "certs"))
 	configPath := getEnv("CONFIG_PATH", filepath.Join(dataDir, "config.json"))
-	legacyConfig := getEnv("LEGACY_CONFIG_PATH", "./proxy_server_old/servers.json")
 
 	adminPort := getEnvInt("ADMIN_PORT", 8080)
 	httpPort := getEnvInt("HTTP_PORT", 9080)
 	httpsPort := getEnvInt("HTTPS_PORT", 9443)
 
 	return &AppConfig{
-		AdminPort:    adminPort,
-		HTTPPort:     httpPort,
-		HTTPSPort:    httpsPort,
-		DataDir:      dataDir,
-		CertDir:      certDir,
-		ConfigPath:   configPath,
-		LegacyConfig: legacyConfig,
+		AdminPort:  adminPort,
+		HTTPPort:   httpPort,
+		HTTPSPort:  httpsPort,
+		DataDir:    dataDir,
+		CertDir:    certDir,
+		ConfigPath: configPath,
 	}
 }
 

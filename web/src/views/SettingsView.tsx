@@ -3,10 +3,12 @@ import {
   Settings,
   Shield,
   Download,
-  RefreshCw,
   Lock,
   Server,
   FileCode,
+  Upload,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import type { SystemSettings } from '../types'
 import { api } from '../services/api'
@@ -35,6 +37,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
   const [tlsError, setTlsError] = useState('')
   const [isSavingTLS, setIsSavingTLS] = useState(false)
   const [legacySuccess, setLegacySuccess] = useState<{ count: number } | null>(null)
+  const [legacyError, setLegacyError] = useState('')
+  const [legacyPayload, setLegacyPayload] = useState('')
+  const [showLegacyPaste, setShowLegacyPaste] = useState(false)
   const [isImportingLegacy, setIsImportingLegacy] = useState(false)
 
   useEffect(() => {
@@ -101,15 +106,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
     }
   }
 
-  const handleImportLegacy = async () => {
+  const handleImportLegacy = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!legacyPayload.trim()) {
+      setLegacyError('Please paste a legacy JSON payload')
+      return
+    }
     setIsImportingLegacy(true)
+    setLegacyError('')
     setLegacySuccess(null)
     try {
-      const res = await api.importLegacy()
+      const res = await api.importLegacy(legacyPayload.trim())
       setLegacySuccess({ count: res.imported_count })
+      setLegacyPayload('')
+      setShowLegacyPaste(false)
       onRefresh()
+      setTimeout(() => setLegacySuccess(null), 5000)
     } catch (err: any) {
-      alert(`Import failed: ${err.message}`)
+      setLegacyError(err.message || 'Import failed')
     } finally {
       setIsImportingLegacy(false)
     }
@@ -305,7 +319,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
             </form>
           </div>
 
-          {/* Legacy Migration & Backup */}
+          {/* Configuration & Legacy Import */}
           <div className="card">
             <div className="card-header">
               <div className="card-title">
@@ -315,26 +329,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onRefresh }) => {
             </div>
 
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-              Import routes directly from your legacy <code>proxy_server_old/servers.json</code> or export the live configuration backup.
+              Import routes directly by pasting your legacy <code>servers.json</code> payload, or export a complete configuration backup.
             </p>
 
             {legacySuccess && (
               <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#6ee7b7', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                Imported {legacySuccess.count} new route(s) from legacy servers.json!
+                Successfully imported {legacySuccess.count} route(s) into ProxyServer!
+              </div>
+            )}
+            {legacyError && (
+              <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', padding: '0.75rem', borderRadius: '6px', color: '#fca5a5', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                {legacyError}
               </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <button
                 type="button"
-                onClick={handleImportLegacy}
-                disabled={isImportingLegacy}
+                onClick={() => {
+                  setShowLegacyPaste(!showLegacyPaste)
+                  setLegacyError('')
+                }}
                 className="btn btn-outline-cyan"
-                style={{ justifyContent: 'flex-start' }}
+                style={{ justifyContent: 'space-between' }}
               >
-                <RefreshCw size={16} className={isImportingLegacy ? 'spin' : ''} />
-                Re-import targets from proxy_server_old/servers.json
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Upload size={16} /> Paste & Import Legacy servers.json
+                </span>
+                {showLegacyPaste ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </button>
+
+              {showLegacyPaste && (
+                <form onSubmit={handleImportLegacy} style={{ background: '#111a2e', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '0.25rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Legacy servers.json JSON payload</label>
+                  <textarea
+                    id="settings-legacy-payload"
+                    className="input input-mono"
+                    style={{ width: '100%', minHeight: '120px', fontSize: '0.75rem', resize: 'vertical', marginBottom: '0.75rem' }}
+                    value={legacyPayload}
+                    onChange={(e) => setLegacyPayload(e.target.value)}
+                    placeholder={`{\n  "targets": {\n    "service.home.makinson.me": {\n      "host": "192.168.1.104:9990",\n      "scheme": "http",\n      "force_ssl": true\n    }\n  }\n}`}
+                    required
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowLegacyPaste(false)
+                        setLegacyError('')
+                      }}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.8125rem' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isImportingLegacy}
+                      className="btn btn-primary"
+                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.8125rem' }}
+                    >
+                      {isImportingLegacy ? 'Importing...' : 'Import Routes'}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               <a
                 href="/api/settings/export"

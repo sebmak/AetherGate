@@ -30,7 +30,7 @@ func TestProxyEngineRoutingAndHeaders(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	s, err := store.NewStore(filepath.Join(tempDir, "config.json"), "")
+	s, err := store.NewStore(filepath.Join(tempDir, "config.json"))
 	if err != nil {
 		t.Fatalf("NewStore error: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestHealthCheckerProbe(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "hc-test-*")
 	defer os.RemoveAll(tempDir)
 
-	s, _ := store.NewStore(filepath.Join(tempDir, "config.json"), "")
+	s, _ := store.NewStore(filepath.Join(tempDir, "config.json"))
 	hc := NewHealthChecker(s)
 
 	ok, latency, msg := hc.TestUpstream("http", upstreamServer.Listener.Addr().String())

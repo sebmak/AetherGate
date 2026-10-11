@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Lock, User, ArrowRight, ShieldAlert } from 'lucide-react'
+import { Lock, User, ArrowRight, ShieldAlert, FileCode, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../services/api'
 
 interface LoginViewProps {
@@ -11,6 +11,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [legacyConfig, setLegacyConfig] = useState('')
+  const [showLegacyImport, setShowLegacyImport] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -35,7 +37,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
 
       setIsLoading(true)
       try {
-        const res = await api.performSetup(username.trim(), password)
+        const res = await api.performSetup(username.trim(), password, legacyConfig)
         onAuthenticated(res.username)
       } catch (err: any) {
         setError(err.message || 'Setup failed')
@@ -154,22 +156,80 @@ export const LoginView: React.FC<LoginViewProps> = ({ isSetup, onAuthenticated }
           </div>
 
           {isSetup && (
-            <div className="form-group">
-              <label className="form-label">Confirm Password</label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input
-                  id="login-confirm-password"
-                  type="password"
-                  className="input"
-                  style={{ paddingLeft: '2.5rem' }}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
+            <>
+              <div className="form-group">
+                <label className="form-label">Confirm Password</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    id="login-confirm-password"
+                    type="password"
+                    className="input"
+                    style={{ paddingLeft: '2.5rem' }}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
               </div>
-            </div>
+
+              <div style={{ marginTop: '0.25rem', marginBottom: '1rem' }}>
+                <button
+                  id="btn-toggle-legacy-import"
+                  type="button"
+                  onClick={() => setShowLegacyImport(!showLegacyImport)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-cyan)',
+                    fontSize: '0.8125rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: 0,
+                    fontWeight: 500,
+                  }}
+                >
+                  <FileCode size={14} />
+                  <span>{showLegacyImport ? 'Hide Existing Config Import' : 'Import Existing servers.json (Optional)'}</span>
+                  {showLegacyImport ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+
+                {showLegacyImport && (
+                  <div style={{
+                    marginTop: '0.65rem',
+                    padding: '0.85rem',
+                    background: 'rgba(11, 19, 38, 0.75)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                  }}>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                      <span>Paste Legacy servers.json</span>
+                      <span style={{ color: 'var(--text-muted)' }}>JSON payload</span>
+                    </label>
+                    <textarea
+                      id="login-legacy-config"
+                      className="input input-mono"
+                      style={{
+                        width: '100%',
+                        minHeight: '120px',
+                        fontSize: '0.75rem',
+                        lineHeight: '1.4',
+                        resize: 'vertical',
+                      }}
+                      value={legacyConfig}
+                      onChange={(e) => setLegacyConfig(e.target.value)}
+                      placeholder={`{\n  "targets": {\n    "app.home.example.com": {\n      "host": "192.168.1.100:8080",\n      "scheme": "http",\n      "force_ssl": true\n    }\n  }\n}`}
+                    />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                      Paste your existing config here to automatically migrate your reverse proxy routes during setup.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           <button

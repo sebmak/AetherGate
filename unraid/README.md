@@ -76,8 +76,8 @@ services:
 ---
 
 ## 📁 Migrating Legacy `servers.json` on Unraid
-
-If you have an existing `servers.json` from `proxy_server_old`:
-1. Copy `servers.json` to `/mnt/user/appdata/proxyserver/servers.json` before starting the container.
-2. ProxyServer will automatically detect and import your targets on its first boot!
-3. You can also re-import at any time from **Settings & Security -> Re-import targets from legacy servers.json**.
+ 
+If you have an existing `servers.json` from your previous proxy:
+1. When starting ProxyServer for the first time, navigate to the Web UI at `http://<unraid-ip>:8080`.
+2. In the setup wizard, expand **"Import Existing servers.json (Optional)"** and paste the JSON content.
+3. You can also import or re-import at any time in the UI from **Settings -> Configuration & Legacy Import**.
