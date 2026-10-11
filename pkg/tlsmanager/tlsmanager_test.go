@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -163,5 +164,79 @@ func TestTLSManagerCertificateInfoCacheLookup(t *testing.T) {
 	}
 	if info.DaysRemaining < 58 || info.DaysRemaining > 61 {
 		t.Errorf("Expected ~60 days remaining, got: %d", info.DaysRemaining)
+	}
+}
+
+// TestTLSManagerGetCertificateDynamicHost verifies that GetCertificate dynamically serves
+// a matching SAN and CN for incoming hostnames without freezing the handshake.
+func TestTLSManagerGetCertificateDynamicHost(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tls-test-sni-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfgPath := filepath.Join(tmpDir, "config.json")
+	certDir := filepath.Join(tmpDir, "certs")
+
+	st, err := store.NewStore(cfgPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	mgr, err := NewManager(st, certDir)
+	if err != nil {
+		t.Fatalf("Failed to create TLS manager: %v", err)
+	}
+
+	// 1. Verify TLS Config has modern curves
+	cfg := mgr.GetTLSConfig()
+	if cfg == nil || len(cfg.CurvePreferences) == 0 {
+		t.Fatalf("Expected non-empty CurvePreferences in TLS config")
+	}
+	if cfg.CurvePreferences[0] != tls.X25519 {
+		t.Errorf("Expected X25519 as preferred curve, got %v", cfg.CurvePreferences[0])
+	}
+
+	// 2. Request certificate for domain with no cached cert
+	cert, err := mgr.GetCertificate(&tls.ClientHelloInfo{
+		ServerName: "movies.home.makinson.me",
+	})
+	if err != nil {
+		t.Fatalf("GetCertificate failed: %v", err)
+	}
+	if len(cert.Certificate) == 0 {
+		t.Fatalf("Returned certificate has no certificate data")
+	}
+
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		t.Fatalf("Failed to parse returned certificate: %v", err)
+	}
+
+	if leaf.Subject.CommonName != "movies.home.makinson.me" {
+		t.Errorf("Expected CommonName 'movies.home.makinson.me', got '%s'", leaf.Subject.CommonName)
+	}
+
+	hasHostSAN := false
+	for _, san := range leaf.DNSNames {
+		if san == "movies.home.makinson.me" {
+			hasHostSAN = true
+			break
+		}
+	}
+	if !hasHostSAN {
+		t.Errorf("Expected 'movies.home.makinson.me' in DNSNames, got %v", leaf.DNSNames)
+	}
+
+	// 3. Request again should return cached certificate
+	cert2, err := mgr.GetCertificate(&tls.ClientHelloInfo{
+		ServerName: "movies.home.makinson.me",
+	})
+	if err != nil {
+		t.Fatalf("Second GetCertificate failed: %v", err)
+	}
+	if cert != cert2 {
+		t.Errorf("Expected cached certificate pointer to be returned")
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -48,14 +47,15 @@ type CertificateInfo struct {
 // Manager handles TLS certificate issuance, caching, renewal, and host policies.
 // All certificate lifecycle events and ACME handshakes are coordinated thread-safely through this manager.
 type Manager struct {
-	mu             sync.RWMutex
-	store          *store.Store
-	certDir        string
-	autocertMgr    *autocert.Manager
-	selfSignedCert *tls.Certificate
-	lastErrors     map[string]string
-	renewing       map[string]bool
-	httpTokens     map[string]string // challengePath -> challengeResponse
+	mu              sync.RWMutex
+	store           *store.Store
+	certDir         string
+	autocertMgr     *autocert.Manager
+	selfSignedCert  *tls.Certificate
+	selfSignedCerts map[string]*tls.Certificate
+	lastErrors      map[string]string
+	renewing        map[string]bool
+	httpTokens      map[string]string // challengePath -> challengeResponse
 }
 
 // NewManager creates a TLS certificate Manager
@@ -65,11 +65,12 @@ func NewManager(s *store.Store, certDir string) (*Manager, error) {
 	}
 
 	m := &Manager{
-		store:      s,
-		certDir:    certDir,
-		lastErrors: make(map[string]string),
-		renewing:   make(map[string]bool),
-		httpTokens: make(map[string]string),
+		store:           s,
+		certDir:         certDir,
+		selfSignedCerts: make(map[string]*tls.Certificate),
+		lastErrors:      make(map[string]string),
+		renewing:        make(map[string]bool),
+		httpTokens:      make(map[string]string),
 	}
 
 	m.initAutocertManager()
@@ -117,13 +118,23 @@ func (m *Manager) GetTLSConfig() *tls.Config {
 	return &tls.Config{
 		GetCertificate: m.GetCertificate,
 		MinVersion:     tls.VersionTLS12,
-		NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
+		CurvePreferences: []tls.CurveID{
+			tls.X25519,
+			tls.CurveP256,
+			tls.CurveP384,
+		},
+		NextProtos: []string{"h2", "http/1.1", "acme-tls/1"},
 	}
 }
 
-// GetCertificate returns a certificate for the client handshake
+// GetCertificate returns a certificate for the client handshake without blocking on slow ACME challenges
 func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	tlsCfg := m.store.GetTLSConfig()
+
+	cleanHost := ""
+	if hello != nil && hello.ServerName != "" {
+		cleanHost = strings.ToLower(strings.TrimSpace(hello.ServerName))
+	}
 
 	// 1. If custom certificates are provided and exist, use them
 	if tlsCfg.Mode == "custom" && tlsCfg.CertPath != "" && tlsCfg.KeyPath != "" {
@@ -135,46 +146,47 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 		logger.SystemError("TLS", "Failed to load custom TLS cert files (Cert: %s, Key: %s): %v. Falling back to self-signed cert.", tlsCfg.CertPath, tlsCfg.KeyPath, err)
 	}
 
-	// 2. If autocert mode is active and we have an SNI server name, request via Let's Encrypt
-	if tlsCfg.Mode == "autocert" || tlsCfg.Mode == "" {
-		if hello.ServerName != "" {
-			cleanHost := strings.ToLower(strings.TrimSpace(hello.ServerName))
-			// Only invoke ACME autocert for registered proxy domains
-			if _, found := m.store.GetTargetByDomain(cleanHost); found {
-				m.mu.Lock()
-				currentEmail := strings.TrimSpace(tlsCfg.Email)
-				if store.IsForbiddenEmail(currentEmail) {
-					currentEmail = ""
+	// 2. Check if a certificate is already cached on disk (autocert or ACME HTTP-01)
+	if cleanHost != "" {
+		candidates := []string{
+			filepath.Join(m.certDir, cleanHost),
+			filepath.Join(m.certDir, cleanHost+"+rsa"),
+		}
+		for _, certPath := range candidates {
+			if certData, err := os.ReadFile(certPath); err == nil {
+				if cert, err := tls.X509KeyPair(certData, certData); err == nil {
+					return &cert, nil
 				}
-				m.autocertMgr.Email = currentEmail
-				mgr := m.autocertMgr
-				m.mu.Unlock()
-
-				cert, err := mgr.GetCertificate(hello)
-				if err == nil {
-					m.mu.Lock()
-					delete(m.lastErrors, cleanHost)
-					m.mu.Unlock()
-					logger.SystemInfo("TLS", "Valid Let's Encrypt certificate retrieved for '%s'", hello.ServerName)
-					return cert, nil
-				}
-
-				// Diagnose cause of ACME certificate generation failure
-				diag := diagnoseACMEError(err)
-				m.mu.Lock()
-				m.lastErrors[cleanHost] = diag
-				m.mu.Unlock()
-				logger.SystemError("TLS", "ACME certificate request for '%s' failed: %s (Falling back to dev cert)", hello.ServerName, diag)
-			} else {
-				logger.SystemWarn("TLS", "Incoming SNI '%s' is not in registered proxy targets. ACME skipped, serving fallback dev cert.", hello.ServerName)
 			}
-		} else {
-			logger.SystemWarn("TLS", "Incoming TLS handshake without SNI hostname. Serving fallback dev cert.")
 		}
 	}
 
-	// 3. Fallback to self-signed certificate for local dev / unconfigured hostnames
-	return m.getOrCreateSelfSigned()
+	// 3. Autocert Mode: if target domain is registered, auto-initiate background ACME issuance
+	if (tlsCfg.Mode == "autocert" || tlsCfg.Mode == "") && cleanHost != "" {
+		if _, found := m.store.GetTargetByDomain(cleanHost); found {
+			m.mu.Lock()
+			isRenewing := m.renewing[cleanHost]
+			m.mu.Unlock()
+
+			if !isRenewing {
+				go func(domain string) {
+					logger.SystemInfo("TLS", "Auto-initiating background ACME HTTP-01 challenge for '%s'", domain)
+					if _, err := m.RenewCertificate(context.Background(), domain); err != nil {
+						logger.SystemWarn("TLS", "Background certificate generation for '%s' completed with error: %v", domain, err)
+					} else {
+						logger.SystemInfo("TLS", "Background certificate generation for '%s' succeeded!", domain)
+					}
+				}(cleanHost)
+			}
+		} else {
+			logger.SystemWarn("TLS", "Incoming SNI '%s' is not in registered proxy targets. Serving fallback dev cert.", hello.ServerName)
+		}
+	} else if cleanHost == "" {
+		logger.SystemWarn("TLS", "Incoming TLS handshake without SNI hostname. Serving fallback dev cert.")
+	}
+
+	// 4. Return dynamic self-signed certificate matching requested hostname to prevent cipher/SAN mismatches
+	return m.getOrCreateSelfSignedForHost(cleanHost)
 }
 
 // HTTPHandler wraps an HTTP handler to intercept ACME challenges
@@ -653,32 +665,54 @@ func diagnoseACMEError(err error) string {
 	return errStr
 }
 
+// getOrCreateSelfSigned returns a self-signed fallback certificate for localhost
 func (m *Manager) getOrCreateSelfSigned() (*tls.Certificate, error) {
+	return m.getOrCreateSelfSignedForHost("localhost")
+}
+
+// getOrCreateSelfSignedForHost returns a cached or dynamically generated self-signed certificate matching host
+func (m *Manager) getOrCreateSelfSignedForHost(host string) (*tls.Certificate, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.selfSignedCert != nil {
-		return m.selfSignedCert, nil
+	cleanHost := strings.ToLower(strings.TrimSpace(host))
+	if cleanHost == "" {
+		cleanHost = "localhost"
 	}
 
-	// Generate in-memory self-signed certificate
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if m.selfSignedCerts == nil {
+		m.selfSignedCerts = make(map[string]*tls.Certificate)
+	}
+
+	if cert, ok := m.selfSignedCerts[cleanHost]; ok {
+		return cert, nil
+	}
+
+	// Generate in-memory self-signed certificate using ECDSA (instant generation, modern curve)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
 
+	dnsNames := []string{cleanHost}
+	if cleanHost != "localhost" {
+		dnsNames = append(dnsNames, "localhost", "*.localhost")
+	} else {
+		dnsNames = append(dnsNames, "*.localhost", "home.local")
+	}
+
 	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber: big.NewInt(time.Now().UnixNano()),
 		Subject: pkix.Name{
 			Organization: []string{"ProxyServer Self-Signed Gateway"},
-			CommonName:   "localhost",
+			CommonName:   cleanHost,
 		},
 		NotBefore:             time.Now().Add(-1 * time.Hour),
 		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              []string{"localhost", "*.localhost", "home.local"},
+		DNSNames:              dnsNames,
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
@@ -691,8 +725,11 @@ func (m *Manager) getOrCreateSelfSigned() (*tls.Certificate, error) {
 		PrivateKey:  priv,
 	}
 
-	m.selfSignedCert = &cert
-	return m.selfSignedCert, nil
+	m.selfSignedCerts[cleanHost] = &cert
+	if cleanHost == "localhost" {
+		m.selfSignedCert = &cert
+	}
+	return &cert, nil
 }
 
 // UpdateEmail updates the autocert ACME account email

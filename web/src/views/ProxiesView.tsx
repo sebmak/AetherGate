@@ -249,28 +249,49 @@ export const ProxiesView: React.FC<ProxiesViewProps> = ({
 
                       {/* Domain */}
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontWeight: 600, color: '#fff', fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                            {p.domain}
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(p.domain)}
-                            className="btn btn-secondary btn-icon"
-                            style={{ padding: '0.2rem', borderRadius: '4px' }}
-                            title="Copy domain"
-                          >
-                            {copiedDomain === p.domain ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
-                          </button>
-                          <a
-                            href={`${p.force_ssl ? 'https' : 'http'}://${p.domain}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn btn-secondary btn-icon"
-                            style={{ padding: '0.2rem', borderRadius: '4px' }}
-                            title="Open in new tab"
-                          >
-                            <ExternalLink size={12} />
-                          </a>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontWeight: 600, color: '#fff', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                              {p.domain}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(p.domain)}
+                              className="btn btn-secondary btn-icon"
+                              style={{ padding: '0.2rem', borderRadius: '4px' }}
+                              title="Copy domain"
+                            >
+                              {copiedDomain === p.domain ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                            </button>
+                            <a
+                              href={`${p.force_ssl ? 'https' : 'http'}://${p.domain}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-secondary btn-icon"
+                              style={{ padding: '0.2rem', borderRadius: '4px' }}
+                              title="Open in new tab"
+                            >
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+                          {p.domain.split('.').length > 3 && (
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.68rem',
+                                color: '#fbbf24',
+                                background: '#261b07',
+                                border: '1px solid #78350f',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '4px',
+                                marginTop: '0.25rem',
+                              }}
+                              title="Multi-level subdomain: Cloudflare free Universal SSL cannot proxy this domain. If proxied, Chrome throws ERR_SSL_VERSION_OR_CIPHER_MISMATCH. Use DNS-Only or a 1st-level subdomain (e.g. movies.makinson.me)."
+                            >
+                              <AlertTriangle size={10} /> Multi-level (CF DNS-Only required)
+                            </div>
+                          )}
                         </div>
                       </td>
 

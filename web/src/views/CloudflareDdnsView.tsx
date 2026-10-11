@@ -588,6 +588,33 @@ export const CloudflareDdnsView: React.FC<CloudflareDdnsViewProps> = ({
               </div>
             </div>
 
+            {proxied && (
+              <div style={{
+                background: '#1c1917',
+                border: '1px solid #78350f',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.85rem 1rem',
+                marginBottom: '1.25rem',
+                fontSize: '0.8125rem',
+                color: '#fde047',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.4rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                  <AlertTriangle size={15} color="#eab308" />
+                  <span>Cloudflare SSL & Multi-Level Subdomains Advisory</span>
+                </div>
+                <div style={{ color: '#d1d5db', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                  Cloudflare's free Universal SSL only issues certificates for root domains and 1st-level subdomains (e.g. <code>*.makinson.me</code>). 
+                  Second-level subdomains like <code>movies.home.makinson.me</code> will trigger <strong>ERR_SSL_VERSION_OR_CIPHER_MISMATCH</strong> if proxied through Cloudflare edge.
+                </div>
+                <div style={{ color: '#9ca3af', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                  <strong>To resolve:</strong> Either toggle Cloudflare Proxy to <strong>DNS Only</strong> (traffic passes directly to ProxyServer with Let's Encrypt), use a 1-level domain (e.g. <code>movies.makinson.me</code>), or enable <em>Total TLS</em> in your Cloudflare Dashboard.
+                </div>
+              </div>
+            )}
+
             {/* Auto-Sync Proxies Checkbox */}
             <div style={{
               background: '#0e131d',
