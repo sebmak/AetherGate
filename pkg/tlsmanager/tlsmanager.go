@@ -739,3 +739,34 @@ func (m *Manager) UpdateEmail(email string) {
 	m.autocertMgr.Email = email
 }
 
+// DeleteCertificate removes all cached certificate files and in-memory caches for domain
+func (m *Manager) DeleteCertificate(domain string) error {
+	cleanHost := strings.ToLower(strings.TrimSpace(domain))
+	if cleanHost == "" {
+		return nil
+	}
+
+	m.mu.Lock()
+	delete(m.selfSignedCerts, cleanHost)
+	delete(m.lastErrors, cleanHost)
+	delete(m.renewing, cleanHost)
+	m.mu.Unlock()
+
+	// Candidate certificate cache files on disk
+	candidates := []string{
+		filepath.Join(m.certDir, cleanHost),
+		filepath.Join(m.certDir, cleanHost+"+rsa"),
+		filepath.Join(m.certDir, cleanHost+"+key"),
+		filepath.Join(m.certDir, cleanHost+"+token"),
+	}
+
+	for _, certPath := range candidates {
+		if err := os.Remove(certPath); err == nil {
+			logger.SystemInfo("TLS", "Deleted certificate cache file %s", certPath)
+		}
+	}
+
+	logger.SystemInfo("TLS", "Purged SSL certificate and cache for domain '%s'", cleanHost)
+	return nil
+}
+

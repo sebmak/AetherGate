@@ -240,3 +240,68 @@ func TestTLSManagerGetCertificateDynamicHost(t *testing.T) {
 		t.Errorf("Expected cached certificate pointer to be returned")
 	}
 }
+
+// TestTLSManagerDeleteCertificate verifies that DeleteCertificate removes certificate files from disk
+// and purges in-memory caches.
+func TestTLSManagerDeleteCertificate(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tls-test-del-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfgPath := filepath.Join(tmpDir, "config.json")
+	certDir := filepath.Join(tmpDir, "certs")
+
+	st, err := store.NewStore(cfgPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	mgr, err := NewManager(st, certDir)
+	if err != nil {
+		t.Fatalf("Failed to create TLS manager: %v", err)
+	}
+
+	domain := "deleteme.home.makinson.me"
+
+	// 1. Create mock certificate files on disk
+	certFile := filepath.Join(certDir, domain)
+	rsaFile := filepath.Join(certDir, domain+"+rsa")
+	_ = os.WriteFile(certFile, []byte("mock-cert"), 0600)
+	_ = os.WriteFile(rsaFile, []byte("mock-rsa"), 0600)
+
+	// 2. Put in-memory entries
+	mgr.mu.Lock()
+	mgr.selfSignedCerts[domain] = &tls.Certificate{}
+	mgr.lastErrors[domain] = "some error"
+	mgr.renewing[domain] = true
+	mgr.mu.Unlock()
+
+	// 3. Delete certificate
+	if err := mgr.DeleteCertificate(domain); err != nil {
+		t.Fatalf("DeleteCertificate failed: %v", err)
+	}
+
+	// 4. Verify disk files are gone
+	if _, err := os.Stat(certFile); !os.IsNotExist(err) {
+		t.Errorf("Expected %s to be deleted", certFile)
+	}
+	if _, err := os.Stat(rsaFile); !os.IsNotExist(err) {
+		t.Errorf("Expected %s to be deleted", rsaFile)
+	}
+
+	// 5. Verify in-memory state is cleared
+	mgr.mu.RLock()
+	if _, ok := mgr.selfSignedCerts[domain]; ok {
+		t.Errorf("Expected selfSignedCerts[%s] to be deleted", domain)
+	}
+	if _, ok := mgr.lastErrors[domain]; ok {
+		t.Errorf("Expected lastErrors[%s] to be deleted", domain)
+	}
+	if _, ok := mgr.renewing[domain]; ok {
+		t.Errorf("Expected renewing[%s] to be deleted", domain)
+	}
+	mgr.mu.RUnlock()
+}
+

@@ -637,3 +637,104 @@ func (m *Manager) updateDNSRecord(ctx context.Context, cfg store.CloudflareConfi
 	_, err := m.cfRequest(ctx, cfg, "PUT", path, payload)
 	return err
 }
+
+func (m *Manager) deleteDNSRecord(ctx context.Context, cfg store.CloudflareConfig, zoneID, recordID string) error {
+	path := fmt.Sprintf("/zones/%s/dns_records/%s", zoneID, recordID)
+	_, err := m.cfRequest(ctx, cfg, "DELETE", path, nil)
+	return err
+}
+
+// DeleteDomainRecord removes the DNS record from Cloudflare and clears local tracking
+func (m *Manager) DeleteDomainRecord(ctx context.Context, domain string) error {
+	cleanDomain := strings.ToLower(strings.TrimSpace(domain))
+	if cleanDomain == "" {
+		return nil
+	}
+
+	cfg := m.store.GetCloudflareConfig()
+	if !cfg.Enabled || (cfg.ApiToken == "" && cfg.ApiKey == "") {
+		// Cloudflare not active/configured, clear local in-memory records
+		m.mu.Lock()
+		delete(m.records, cleanDomain)
+		m.mu.Unlock()
+		return nil
+	}
+
+	zoneID := cfg.ZoneID
+	if zoneID == "" {
+		var err error
+		zoneID, err = m.ResolveZoneID(ctx, cfg, cleanDomain)
+		if err != nil {
+			logger.Warn("[DDNS] Could not determine zone ID for %s to delete DNS record: %v", cleanDomain, err)
+			m.mu.Lock()
+			delete(m.records, cleanDomain)
+			m.mu.Unlock()
+			return err
+		}
+	}
+
+	// 1. Check if we already have the record ID tracked in memory
+	m.mu.RLock()
+	tracked := m.records[cleanDomain]
+	m.mu.RUnlock()
+
+	var recordIDs []string
+	if tracked != nil && tracked.RecordID != "" {
+		recordIDs = append(recordIDs, tracked.RecordID)
+	}
+
+	// 2. Also search Cloudflare DNS records for "A", "AAAA", and "CNAME" records matching cleanDomain
+	for _, recType := range []string{"A", "AAAA", "CNAME"} {
+		records, err := m.getDNSRecords(ctx, cfg, zoneID, cleanDomain, recType)
+		if err == nil {
+			for _, rec := range records {
+				alreadyIncluded := false
+				for _, existing := range recordIDs {
+					if existing == rec.ID {
+						alreadyIncluded = true
+						break
+					}
+				}
+				if !alreadyIncluded {
+					recordIDs = append(recordIDs, rec.ID)
+				}
+			}
+		}
+	}
+
+	// 3. Delete each record found in Cloudflare
+	var deleteErrors []string
+	for _, recID := range recordIDs {
+		if err := m.deleteDNSRecord(ctx, cfg, zoneID, recID); err != nil {
+			deleteErrors = append(deleteErrors, fmt.Sprintf("record %s: %v", recID, err))
+		} else {
+			logger.Info("[DDNS] Successfully deleted Cloudflare DNS record %s for %s", recID, cleanDomain)
+		}
+	}
+
+	// 4. Clear local record tracking
+	m.mu.Lock()
+	delete(m.records, cleanDomain)
+	m.mu.Unlock()
+
+	// 5. If domain was explicitly in CloudflareConfig.Domains, remove it
+	newDomains := make([]string, 0, len(cfg.Domains))
+	changed := false
+	for _, d := range cfg.Domains {
+		if strings.EqualFold(d, cleanDomain) {
+			changed = true
+			continue
+		}
+		newDomains = append(newDomains, d)
+	}
+	if changed {
+		cfg.Domains = newDomains
+		_ = m.store.SaveCloudflareConfig(cfg)
+	}
+
+	if len(deleteErrors) > 0 {
+		return fmt.Errorf("errors deleting DNS records: %s", strings.Join(deleteErrors, ", "))
+	}
+	return nil
+}
+

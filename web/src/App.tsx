@@ -300,7 +300,7 @@ export const App: React.FC = () => {
       <ConfirmModal
         isOpen={Boolean(deletingProxy)}
         title="Delete Reverse Proxy"
-        message={`Are you sure you want to delete "${deletingProxy?.name}" (${deletingProxy?.domain})? Traffic to this domain will immediately return 404.`}
+        message={`Are you sure you want to delete "${deletingProxy?.name}" (${deletingProxy?.domain})? Traffic will stop, and its SSL certificate and Cloudflare DNS records will be permanently removed.`}
         confirmText="Delete Proxy"
         confirmVariant="danger"
         isLoading={isDeleting}

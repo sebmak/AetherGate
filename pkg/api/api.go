@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -415,13 +416,47 @@ func (s *Server) handleUpdateProxy(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteProxy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+
+	// Get target details before deletion to clean up its resources
+	target, err := s.store.GetTargetByID(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "Target not found"})
+		return
+	}
+
+	domain := target.Domain
+
+	// 1. Delete target from persistent store
 	if err := s.store.DeleteTarget(id); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
 
-	logger.Info("Deleted proxy target with ID %s", id)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+	logger.Info("Deleted proxy target '%s' (%s, ID: %s)", target.Name, domain, id)
+
+	// 2. Remove SSL certificate and cache
+	if s.tlsManager != nil && domain != "" {
+		if err := s.tlsManager.DeleteCertificate(domain); err != nil {
+			logger.SystemWarn("TLS", "Failed to delete SSL certificate for '%s': %v", domain, err)
+		} else {
+			logger.SystemInfo("TLS", "Successfully removed SSL certificate for '%s'", domain)
+		}
+	}
+
+	// 3. Delete Cloudflare DNS records asynchronously
+	if s.ddnsManager != nil && domain != "" {
+		go func(dom string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			if err := s.ddnsManager.DeleteDomainRecord(ctx, dom); err != nil {
+				logger.Warn("[DDNS] Failed to delete Cloudflare DNS records for '%s': %v", dom, err)
+			} else {
+				logger.Info("[DDNS] Successfully cleaned up Cloudflare DNS records for '%s'", dom)
+			}
+		}(domain)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "domain": domain})
 }
 
 func (s *Server) handleToggleProxy(w http.ResponseWriter, r *http.Request) {
