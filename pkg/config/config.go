@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the current application release version
-var Version = "2.0.10"
+var Version = "2.0.11"
 
 // AppConfig holds global application configuration
 type AppConfig struct {
