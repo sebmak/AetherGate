@@ -7,9 +7,10 @@ import (
 )
 
 // Version is the current application release version
-var Version = "2.0.12"
+var Version = "2.1.0"
 
-// AppConfig holds global application configuration
+// AppConfig holds global application configuration.
+// Rules: All port numbers must be positive and non-conflicting; DataDir, CertDir, and DBPath must be valid paths.
 type AppConfig struct {
 	AdminPort  int
 	HTTPPort   int
@@ -17,6 +18,7 @@ type AppConfig struct {
 	DataDir    string
 	CertDir    string
 	ConfigPath string
+	DBPath     string
 }
 
 // LoadConfig loads configuration from environment variables with sensible defaults
@@ -31,6 +33,7 @@ func LoadConfig() *AppConfig {
 
 	certDir := getEnv("CERT_DIR", filepath.Join(dataDir, "certs"))
 	configPath := getEnv("CONFIG_PATH", filepath.Join(dataDir, "config.json"))
+	dbPath := getEnv("DB_PATH", filepath.Join(dataDir, "aethergate.db"))
 
 	adminPort := getEnvInt("ADMIN_PORT", 8080)
 	httpPort := getEnvInt("HTTP_PORT", 9080)
@@ -43,6 +46,7 @@ func LoadConfig() *AppConfig {
 		DataDir:    dataDir,
 		CertDir:    certDir,
 		ConfigPath: configPath,
+		DBPath:     dbPath,
 	}
 }
 
