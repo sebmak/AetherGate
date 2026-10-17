@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the current application release version
-var Version = "2.1.0"
+var Version = "2.1.1"
 
 // AppConfig holds global application configuration.
 // Rules: All port numbers must be positive and non-conflicting; DataDir, CertDir, and DBPath must be valid paths.
